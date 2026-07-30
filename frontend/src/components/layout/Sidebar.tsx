@@ -7,6 +7,9 @@ import {
   ArrowRightLeft, 
   FileText, 
   CreditCard, 
+  Wallet,
+  QrCode,
+  Bell,
   Landmark, 
   PiggyBank, 
   Receipt,
@@ -21,11 +24,14 @@ import {
 const MENU_ITEMS = [
   { href: "/dashboard", label: "Trang chủ", icon: Home },
   { href: "/transfers", label: "Chuyển tiền", icon: ArrowRightLeft },
-  { href: "/accounts", label: "Tài khoản & Thẻ", icon: CreditCard },
+  { href: "/qr-pay", label: "Thanh toán VietQR", icon: QrCode },
+  { href: "/cards", label: "Quản lý Thẻ", icon: Wallet },
+  { href: "/accounts", label: "Tài khoản thanh toán", icon: CreditCard },
   { href: "/transactions", label: "Lịch sử giao dịch", icon: History },
   { href: "/bills", label: "Hóa đơn & Nạp tiền", icon: Receipt },
   { href: "/beneficiaries", label: "Danh bạ thụ hưởng", icon: FileText },
   { href: "/savings", label: "Tiết kiệm", icon: PiggyBank },
+  { href: "/notifications", label: "Trung tâm Thông báo", icon: Bell },
 ];
 
 export function Sidebar() {

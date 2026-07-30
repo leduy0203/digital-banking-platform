@@ -1,263 +1,86 @@
-# Architecture & System Design Document - Digital Banking Platform
+# Tài Liệu Kiến Trúc & Thiết Kế Hệ Thống (System Architecture & Design Document)
 
-## 10. System Architecture
+## 10. Kiến Trúc Tổng Thể Hệ Thống (System Architecture)
 
-### 10.1 High-Level Architecture Overview
-
-The Digital Banking Platform follows a modern **Modular Monolith Architecture**. Rather than deploying dozens of microservices with associated network overhead and distributed transaction complexities (Saga patterns, partial failures), the monolith is partitioned internally into distinct domain modules with strict isolation boundaries.
+Dự án được thiết kế theo mô hình **Modular Monolith** kết hợp với kiến trúc **Clean Architecture / Hexagonal Architecture** ở Backend và **App Router (Next.js 15)** ở Frontend.
 
 ```mermaid
-graph TB
-    subgraph Client Layer
-        Web[Next.js 15 Web Application]
-        Mobile[Mobile Web View / PWA]
-    end
-
-    subgraph Edge & Security Layer
-        Nginx[Nginx Reverse Proxy / SSL Termination]
-        SpringSec[Spring Security 6 Gatekeeper Filter Chain]
-        RateLimiter[Redis Rate Limiter Filter]
-    end
-
-    subgraph Monolith Core Application - Spring Boot 3
-        subgraph Domain Modules
-            AuthMod[auth module]
-            UserMod[user/customer module]
-            AccountMod[account module]
-            TxMod[transfer & transaction module]
-            SavingsMod[savings deposit module]
-            NotifMod[notification module]
-            AdminMod[admin audit module]
-        end
-        
-        subgraph Shared Core Infrastructure
-            SecurityContext[Security Context]
-            EventBus[Internal Application Event Publisher]
-            GlobalExcept[Global Exception Handler RFC 7807]
-        end
-    end
-
-    subgraph Data Infrastructure
-        Postgres[(PostgreSQL Primary DB)]
-        RedisCache[(Redis Cache & Session Store)]
-        RabbitMQBus[RabbitMQ Message Broker]
-    end
-
-    Web -->|HTTPS REST API / JSON| Nginx
-    Web -->|WSS STOMP| Nginx
-    Nginx --> RateLimiter
-    RateLimiter --> SpringSec
-    SpringSec --> Monolith Core Application - Spring Boot 3
+graph TD
+    UserClient[Trình duyệt Web Next.js 15] -->|HTTPS REST / STOMP WSS| Nginx[Nginx Reverse Proxy & Gateway Filter]
+    Nginx -->|Filter JWT & RBAC| SecurityEngine[Spring Security 6 Gatekeeper]
+    SecurityEngine -->|Thread Local Security Context| CoreEngine[Spring Boot 3 Core Monolith Engine]
     
-    TxMod -->|Read/Write| Postgres
-    AccountMod -->|Read/Write| Postgres
-    AuthMod -->|Session Token/OTP| RedisCache
-    NotifMod -->|Async Events| RabbitMQBus
+    subgraph Quản Lý Mô-đun Nghiệp Vụ Backend
+        CoreEngine --> AuthDomain[Mô-đun Xác thực Auth & OTP]
+        CoreEngine --> AccountDomain[Mô-đun Sổ cái Tài khoản Account Ledger]
+        CoreEngine --> CardDomain[Mô-đun Quản lý Thẻ Bank Card]
+        CoreEngine --> TransferDomain[Mô-đun Chuyển tiền & VietQR Engine]
+        CoreEngine --> SavingsDomain[Mô-đun Tiết kiệm Savings]
+        CoreEngine --> NotifDomain[Mô-đun Thông báo & STOMP Push]
+        CoreEngine --> EmployeeDomain[Mô-đun Giao dịch viên Employee Ops]
+        CoreEngine --> AdminDomain[Mô-đun Quản trị & Audit Log]
+    end
+    
+    CoreEngine -->|Pessimistic Lock / Ledger| PostgresDB[(PostgreSQL 16 Database)]
+    CoreEngine -->|Caching / Session / Rate Limit| RedisCache[(Redis 7 Cache)]
+    CoreEngine -->|Event Bus| MessageBroker[RabbitMQ Broker]
+    MessageBroker -->|STOMP Push| UserClient
 ```
 
 ---
 
-## 14. Backend Package Structure (Feature-Based Architecture)
+## 15. Cấu Trúc Mã Nguồn Frontend (Next.js 15 App Router)
 
-To enforce low coupling and high cohesion, the project uses **Feature-Based Packaging** (Package-by-Feature) rather than traditional Layer-Based Packaging (Package-by-Layer). Every domain functionality resides within its own isolated package hierarchy.
-
-### Directory Tree Overview
+Mã nguồn Frontend nằm tại thư mục `frontend/src` và được tổ chức theo chuẩn Next.js 15 App Router:
 
 ```text
-com.bank.digital
-├── DigitalBankingApplication.java
-├── config/
-│   ├── SecurityConfig.java
-│   ├── RedisConfig.java
-│   ├── RabbitMQConfig.java
-│   ├── WebSocketConfig.java
-│   ├── OpenAPIConfig.java
-│   └── JpaAuditingConfig.java
-├── common/
-│   ├── annotation/
-│   │   └── Idempotent.java
-│   ├── dto/
-│   │   ├── ApiResponse.java
-│   │   └── PageResponse.java
-│   ├── exception/
-│   │   ├── BusinessException.java
-│   │   ├── ErrorCode.java
-│   │   └── GlobalExceptionHandler.java
-│   ├── model/
-│   │   └── BaseAuditEntity.java
-│   └── util/
-│       └── SecurityUtils.java
-├── module/
-│   ├── auth/
-│   │   ├── controller/
-│   │   │   └── AuthController.java
-│   │   ├── dto/
-│   │   │   ├── request/
-│   │   │   │   ├── LoginRequest.java
-│   │   │   │   ├── RegisterRequest.java
-│   │   │   │   └── OtpVerificationRequest.java
-│   │   │   └── response/
-│   │   │       ├── AuthResponse.java
-│   │   │       └── UserProfileResponse.java
-│   │   ├── entity/
-│   │   │   ├── UserEntity.java
-│   │   │   └── RoleEntity.java
-│   │   ├── mapper/
-│   │   │   └── UserMapper.java
-│   │   ├── repository/
-│   │   │   └── UserRepository.java
-│   │   └── service/
-│   │       ├── AuthService.java
-│   │       └── impl/
-│   │           └── AuthServiceImpl.java
-│   ├── account/
-│   │   ├── controller/AccountController.java
-│   │   ├── dto/...
-│   │   ├── entity/AccountEntity.java
-│   │   ├── repository/AccountRepository.java
-│   │   └── service/...
-│   ├── transfer/
-│   │   ├── controller/TransferController.java
-│   │   ├── dto/...
-│   │   ├── entity/TransactionEntity.java
-│   │   ├── repository/TransactionRepository.java
-│   │   └── service/...
-│   ├── savings/
-│   │   ├── controller/SavingsController.java
-│   │   ├── entity/SavingsAccountEntity.java
-│   │   └── scheduler/SavingsInterestScheduler.java
-│   ├── notification/
-│   │   ├── consumer/NotificationEventConsumer.java
-│   │   ├── service/WebSocketNotificationService.java
-│   │   └── dto/...
-│   └── admin/
-│       ├── controller/AdminDashboardController.java
-│       └── service/AuditLogService.java
+frontend/src/
+├── app/
+│   ├── (dashboard)/            # Phân hệ Khách hàng (Customer Portal)
+│   │   ├── accounts/           # Trang Quản lý tài khoản thanh toán & sao kê
+│   │   ├── beneficiaries/      # Trang Danh bạ người thụ hưởng
+│   │   ├── bills/              # Trang Thanh toán hóa đơn & nạp tiền điện thoại
+│   │   ├── cards/              # Trang Quản lý Thẻ (Debit/Credit/Virtual, Khóa thẻ, Đổi PIN)
+│   │   ├── dashboard/          # Trang Chủ tổng quan tài khoản & biểu đồ dòng tiền
+│   │   ├── notifications/      # Trang Trung tâm Thông báo biến động số dư & bảo mật
+│   │   ├── qr-pay/             # Trang Thanh toán VietQR NAPAS 247 & Quét mã QR
+│   │   ├── savings/            # Trang Gửi tiết kiệm online & tất toán
+│   │   ├── settings/           # Trang Cài đặt cá nhân & đổi mật khẩu
+│   │   ├── transactions/       # Trang Lịch sử giao dịch & xuất sao kê PDF/Excel
+│   │   └── transfers/          # Trang Chuyển tiền nội bộ & liên ngân hàng 24/7
+│   ├── admin/                  # Phân hệ Quản trị (Admin Portal)
+│   │   ├── audit/              # Trang Nhật ký vết thao tác (Audit Logs)
+│   │   ├── dashboard/          # Trang Dashboard thống kê sức khỏe hệ thống
+│   │   ├── roles/              # Trang Quản lý phân quyền RBAC
+│   │   ├── system/             # Trang Cấu hình hệ thống & Feature Toggles
+│   │   └── users/              # Trang Quản lý nhân viên nội bộ
+│   ├── employee/               # Phân hệ Giao dịch viên (Teller Portal)
+│   │   ├── accounts/           # Trang Mở & Khóa tài khoản tại quầy
+│   │   ├── cash-ops/           # Trang Giao dịch Nộp / Rút tiền mặt tại quầy
+│   │   ├── customers/          # Trang Tra cứu hồ sơ khách hàng
+│   │   ├── dashboard/          # Trang Dashboard giao dịch viên
+│   │   ├── kyc/                # Trang Phê duyệt hồ sơ định danh eKYC
+│   │   └── transactions/       # Trang Tra cứu & Soát xét giao dịch
+│   ├── login/                  # Trang Đăng nhập
+│   ├── register/               # Trang Đăng ký trực tuyến
+│   ├── globals.css             # Stylesheet toàn cục với Tailwind CSS
+│   └── layout.tsx              # Root Layout toàn ứng dụng
+├── components/                 # Các UI Components tái sử dụng
+│   ├── admin/                  # Components giao dịch Admin (AdminSidebar...)
+│   ├── employee/               # Components giao dịch Employee (EmployeeSidebar...)
+│   ├── layout/                 # Layout chính (Sidebar, Header...)
+│   └── ui/                     # UI Primitives (Button, Modal, Card...)
+├── lib/
+│   ├── api/                    # Axios API Client instances & Services
+│   ├── mock/                   # Dữ liệu giả lập (cardsData, notificationsData...)
+│   └── types/                  # TypeScript Types & Interfaces (cards, notifications, admin...)
+└── providers/                  # React Context & TanStack Query Providers
 ```
 
 ---
 
-## 15. Frontend Folder Structure (Next.js 15 App Router)
+## 17. Quản Lý Trạng Thái & Tích Hợp API (State Management Strategy)
 
-The frontend application leverages **Next.js 15 App Router**, utilizing Server Components for optimal rendering performance, Server Actions where appropriate, and Client Components for dynamic user interactions (forms, dashboards, charts).
-
-```text
-digital-banking-ui/
-├── src/
-│   ├── app/
-│   │   ├── (auth)/
-│   │   │   ├── login/
-│   │   │   │   └── page.tsx
-│   │   │   ├── register/
-│   │   │   │   └── page.tsx
-│   │   │   └── layout.tsx
-│   │   ├── (dashboard)/
-│   │   │   ├── layout.tsx
-│   │   │   ├── dashboard/
-│   │   │   │   └── page.tsx
-│   │   │   ├── accounts/
-│   │   │   │   └── page.tsx
-│   │   │   ├── transfers/
-│   │   │   │   └── page.tsx
-│   │   │   ├── savings/
-│   │   │   │   └── page.tsx
-│   │   │   └── settings/
-│   │   │       └── page.tsx
-│   │   ├── (admin)/
-│   │   │   ├── admin/
-│   │   │   │   ├── users/page.tsx
-│   │   │   │   └── audit-logs/page.tsx
-│   │   │   └── layout.tsx
-│   │   ├── api/
-│   │   │   └── auth/[...nextauth]/route.ts
-│   │   ├── global.css
-│   │   ├── layout.tsx
-│   │   └── page.tsx
-│   ├── components/
-│   │   ├── ui/                 # Atomic shadcn/ui components (Button, Dialog, Form, Input, Select)
-│   │   ├── layout/             # Navbar, Sidebar, Footer, UserMenu
-│   │   ├── shared/             # DataTable, Modal, LoadingSpinner, NotificationBell
-│   │   └── providers/          # QueryClientProvider, ThemeProvider, WebSocketProvider
-│   ├── features/
-│   │   ├── auth/               # Components, hooks, types specific to Auth
-│   │   │   ├── components/LoginForm.tsx
-│   │   │   ├── hooks/useAuth.ts
-│   │   │   └── api/authApi.ts
-│   │   ├── accounts/
-│   │   ├── transfers/
-│   │   │   ├── components/TransferForm.tsx
-│   │   │   ├── components/OtpModal.tsx
-│   │   │   └── hooks/useTransfer.ts
-│   │   └── savings/
-│   ├── hooks/                  # Cross-cutting custom React hooks (useMediaQuery, useDebounce)
-│   ├── lib/                    # Library configurations (axios.ts, query-client.ts, utils.ts)
-│   ├── services/               # Axios API client modules
-│   ├── types/                  # Global TypeScript interfaces & DTO definitions
-│   └── middleware.ts           # Route Protection Guard & JWT verification middleware
-├── public/                     # Static assets, branding logos, icons
-├── tailwind.config.js
-├── tsconfig.json
-└── package.json
-```
-
----
-
-## 16. Backend Request Lifecycle Execution
-
-The request lifecycle in Spring Boot follows strict layer isolation:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client as Next.js Client
-    participant Ctrl as AccountController
-    participant Service as AccountServiceImpl
-    participant Repo as AccountRepository
-    participant DB as PostgreSQL DB
-    participant Mapper as AccountMapper
-
-    Client->>Ctrl: GET /api/v1/accounts/{accountNumber} (Bearer Token)
-    Ctrl->>Ctrl: Validate Request & Security Context
-    Ctrl->>Service: getAccountDetails(accountNumber)
-    Service->>Repo: findByAccountNumber(accountNumber)
-    Repo->>DB: SELECT * FROM tbl_account WHERE account_number = ?
-    DB-->>Repo: Return AccountEntity
-    Repo-->>Service: Optional<AccountEntity>
-    Service->>Service: Check Business Rules & Permissions
-    Service->>Mapper: toAccountResponseDto(accountEntity)
-    Mapper-->>Service: AccountResponseDTO
-    Service-->>Ctrl: AccountResponseDTO
-    Ctrl-->>Client: 200 OK (ApiResponse<AccountResponseDTO>)
-```
-
----
-
-## 17. Frontend Architecture & State Strategy
-
-### 17.1 Client-Side Data Management (TanStack Query + Axios)
-- **TanStack Query v5**: Handles caching, automatic background revalidation, optimistic updates, and loading/error states for all server-originating data.
-- **Axios Instance**: Configured with `withCredentials: true` for automatic HttpOnly cookie transmission, global error interceptors for automatic JWT renewal on `401 Unauthorized`.
-
-```typescript
-// Example Lib Axios Interceptor pattern
-import axios from 'axios';
-
-export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
-  withCredentials: true,
-  headers: { 'Content-Type': 'application.json' },
-});
-
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      await apiClient.post('/api/v1/auth/refresh-token');
-      return apiClient(originalRequest);
-    }
-    return Promise.reject(error);
-  }
-);
-```
+1. **Server State (TanStack Query v5)**: Quản lý việc fetch, cache và revalidate dữ liệu từ backend (tài khoản, danh sách thẻ, thông báo, nhật ký giao dịch).
+2. **Local Component State**: Quản lý trạng thái UI ngắn hạn (mở/đóng Modal đổi PIN, chuyển đổi giữa các thẻ, chọn tab quét/tạo mã QR).
+3. **Optimistic Updates**: Khi thực hiện khóa/mở khóa thẻ hoặc đánh dấu đã đọc thông báo, UI cập nhật ngay lập tức trước khi nhận phản hồi từ server để tăng độ mượt mà.
