@@ -31,3 +31,22 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### OS & Logs ###
+.DS_Store
+Thumbs.db
+*.log
+logs/
+
+### Spring Boot Configs ###
+**/src/main/resources/application.yml
+**/src/main/resources/application.yaml
+**/src/main/resources/application-*.yml
+**/src/main/resources/application-*.yaml
+**/src/main/resources/application.properties
+**/src/main/resources/application-*.properties
+
+# Giữ lại file mẫu để người khác clone về biết cấu hình
+!**/src/main/resources/application.yml.example
+!**/src/main/resources/application.yaml.example
+!**/src/main/resources/application.properties.example
