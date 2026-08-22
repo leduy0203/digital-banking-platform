@@ -1,7 +1,8 @@
 package com.digitalbanking.domain.entity;
 
-import com.digitalbanking.common.AccountStatus;
-import com.digitalbanking.common.AccountType;
+import com.digitalbanking.domain.common.BaseEntity;
+import com.digitalbanking.domain.enums.AccountStatus;
+import com.digitalbanking.domain.enums.AccountType;
 import jakarta.persistence.*;
 import lombok.*;
 

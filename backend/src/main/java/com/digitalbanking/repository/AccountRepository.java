@@ -1,6 +1,6 @@
 package com.digitalbanking.repository;
 
-import com.digitalbanking.common.AccountStatus;
+import com.digitalbanking.domain.enums.AccountStatus;
 import com.digitalbanking.domain.entity.AccountEntity;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;

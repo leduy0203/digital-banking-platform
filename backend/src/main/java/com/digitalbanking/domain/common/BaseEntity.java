@@ -1,4 +1,4 @@
-package com.digitalbanking.domain.entity;
+package com.digitalbanking.domain.common;
 
 import jakarta.persistence.*;
 import lombok.Getter;

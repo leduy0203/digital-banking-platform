@@ -1,4 +1,4 @@
-package com.digitalbanking.common;
+package com.digitalbanking.domain.enums;
 
 public enum TransactionStatus {
 

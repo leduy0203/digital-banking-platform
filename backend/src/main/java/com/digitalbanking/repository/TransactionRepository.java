@@ -1,6 +1,6 @@
 package com.digitalbanking.repository;
 
-import com.digitalbanking.common.TransactionStatus;
+import com.digitalbanking.domain.enums.TransactionStatus;
 import com.digitalbanking.domain.entity.TransactionEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
