@@ -1,4 +1,4 @@
-package com.digitalbanking.dto.response;
+package com.digitalbanking.domain.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
