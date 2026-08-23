@@ -1,5 +1,6 @@
 package com.digitalbanking.domain.entity;
 
+import com.digitalbanking.domain.enums.UserRole;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,7 +23,8 @@ public class RoleEntity {
     private UUID id;
 
     @Column(name = "role_code", nullable = false, unique = true, length = 50)
-    private String roleCode;
+    @Enumerated(EnumType.STRING)
+    private UserRole roleCode;
 
     @Column(name = "role_name", nullable = false, length = 100)
     private String roleName;

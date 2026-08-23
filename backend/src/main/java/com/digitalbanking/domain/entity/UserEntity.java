@@ -30,9 +30,6 @@ public class UserEntity extends BaseEntity implements UserDetails {
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "user_roles",
@@ -45,6 +42,8 @@ public class UserEntity extends BaseEntity implements UserDetails {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private CustomerEntity customer;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
@@ -54,7 +53,7 @@ public class UserEntity extends BaseEntity implements UserDetails {
         if (this.roles != null) {
             for (RoleEntity role : this.roles) {
                 if (role.getRoleCode() != null) {
-                    authorities.add(new SimpleGrantedAuthority(role.getRoleCode()));
+                    authorities.add(new SimpleGrantedAuthority(role.getRoleCode().toString()));
                 }
                 if (role.getPermissions() != null) {
                     for (PermissionEntity permission : role.getPermissions()) {

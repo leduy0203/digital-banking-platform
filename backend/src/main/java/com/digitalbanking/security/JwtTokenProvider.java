@@ -107,6 +107,8 @@ public class JwtTokenProvider {
         String cleanPem = keyPem
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\r", "")
+                .replaceAll("\\n", "")
                 .replaceAll("\\s+", "");
         byte[] encoded = Base64.getDecoder().decode(cleanPem);
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
@@ -117,6 +119,8 @@ public class JwtTokenProvider {
         String cleanPem = keyPem
                 .replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")
+                .replaceAll("\\r", "")
+                .replaceAll("\\n", "")
                 .replaceAll("\\s+", "");
         byte[] encoded = Base64.getDecoder().decode(cleanPem);
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
