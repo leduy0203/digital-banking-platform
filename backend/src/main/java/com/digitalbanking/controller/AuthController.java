@@ -45,7 +45,7 @@ public class AuthController {
     public ApiResponse<AuthResponse> refreshToken(
             @Valid @RequestBody RefreshTokenRequest request
     ) {
-        log.info("Refresh token attempt for refresh token: {}", request.getRefreshToken());
+        log.info("Refresh token attempt for refresh toke");
 
         AuthResponse response = authService.refreshToken(request);
         return ApiResponse.ok("Token refreshed successfully", response);

@@ -126,6 +126,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+
     @Override
     public AuthResponse login(LoginRequest request) {
         log.info("Processing login request for identifier: {}", request.getUsername());
@@ -147,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
 
         log.info("User ID {} ({}) logged in successfully", user.getId(), customer.getFullName());
 
-        return generateTokensAndBuildResponse(user, customer.getFullName());
+        return generateTokensAndBuildResponse(user, customer.getFullName() , null);
     }
 
 
@@ -188,6 +189,9 @@ public class AuthServiceImpl implements AuthService {
         CustomerEntity customer = customerRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.CUSTOMER_NOT_FOUND));
 
+        //get expires of old token
+        Instant originalExpiresAt = tokenEntity.getExpiresAt();
+
         // set revoked and last used at
         tokenEntity.setIsRevoked(true);
         tokenEntity.setLastUsedAt(Instant.now());
@@ -195,8 +199,9 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.save(tokenEntity);
 
-        return generateTokensAndBuildResponse(user, customer.getFullName());
+        return generateTokensAndBuildResponse(user, customer.getFullName() , originalExpiresAt);
     }
+
 
     @Override
     public void logout(String refreshToken) {
@@ -204,8 +209,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-    private AuthResponse generateTokensAndBuildResponse(UserEntity user, String fullName) {
+    private AuthResponse generateTokensAndBuildResponse(UserEntity user, String fullName, Instant originalExpiresAt) {
         log.info("Generating tokens for user with email: {}", user.getEmail());
+
+        Instant expiry = (originalExpiresAt != null)
+                ? originalExpiresAt
+                : Instant.now().plusMillis(refreshTokenExpirationMs);
 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
         String refreshTokenStr = jwtTokenProvider.generateRefreshToken(user);
@@ -216,7 +225,7 @@ public class AuthServiceImpl implements AuthService {
                 .user(user)
                 .tokenHash(hashToken)
                 .isRevoked(false)
-                .expiresAt(Instant.now().plusMillis(refreshTokenExpirationMs))
+                .expiresAt(expiry)
                 .build();
 
         refreshTokenRepository.save(refreshTokenEntity);
@@ -244,6 +253,7 @@ public class AuthServiceImpl implements AuthService {
                 .user(userSummary)
                 .build();
     }
+
 
     private String hashToken(String token) {
         try {
