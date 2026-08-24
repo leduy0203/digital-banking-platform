@@ -29,9 +29,14 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -94,9 +99,16 @@ public class AuthServiceImpl implements AuthService {
         UserEntity savedUser = userRepository.save(user);
         log.info("User registered successfully with id={}", savedUser.getId());
 
+
+        String shortUuid = UUID.randomUUID().toString()
+                .replace("-", "")
+                .substring(0, 10)
+                .toUpperCase();
+
+
         CustomerEntity customer = CustomerEntity.builder()
                 .user(savedUser)
-                .customerCode("CUST-" + savedUser.getId())
+                .customerCode("CUST-" + shortUuid)
                 .nationalId(request.getNationalId())
                 .fullName(request.getFullName())
                 .build();
@@ -138,9 +150,52 @@ public class AuthServiceImpl implements AuthService {
         return generateTokensAndBuildResponse(user, customer.getFullName());
     }
 
+
     @Override
     public AuthResponse refreshToken(RefreshTokenRequest request) {
-        return null;
+        log.info("Processing refresh token request");
+
+        if (!jwtTokenProvider.validateToken(request.getRefreshToken())) {
+            log.warn("Refresh token validation failed: Invalid or expired JWT signature");
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        String hashedIncomingToken = hashToken(request.getRefreshToken());
+
+        RefreshTokenEntity tokenEntity = refreshTokenRepository.findByTokenHash(hashedIncomingToken)
+                .orElseThrow(() -> {
+                    log.warn("Refresh token not found in database for hash: {}", hashedIncomingToken);
+                    return new BusinessException(ErrorCode.UNAUTHENTICATED);
+                });
+
+        if (Boolean.TRUE.equals(tokenEntity.getIsRevoked())) {
+            log.warn("Security Alert: Attempted use of revoked refresh token ID: {}", tokenEntity.getId());
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        if (tokenEntity.getExpiresAt().isBefore(Instant.now())) {
+            log.warn("Refresh token ID {} has expired at {}", tokenEntity.getId(), tokenEntity.getExpiresAt());
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED);
+        }
+
+        UserEntity user= tokenEntity.getUser();
+
+        if (!UserStatus.ACTIVE.equals(user.getStatus())) {
+            log.warn("Refresh token rejected: Account ID {} status is {}", user.getId(), user.getStatus());
+            throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
+        }
+
+        CustomerEntity customer = customerRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.CUSTOMER_NOT_FOUND));
+
+        // set revoked and last used at
+        tokenEntity.setIsRevoked(true);
+        tokenEntity.setLastUsedAt(Instant.now());
+        log.info("Revoked old refresh token ID {} for user ID {}", tokenEntity.getId(), user.getId());
+
+        refreshTokenRepository.save(tokenEntity);
+
+        return generateTokensAndBuildResponse(user, customer.getFullName());
     }
 
     @Override
@@ -155,9 +210,11 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(user);
         String refreshTokenStr = jwtTokenProvider.generateRefreshToken(user);
 
+        String hashToken = hashToken(refreshTokenStr);
+
         RefreshTokenEntity refreshTokenEntity = RefreshTokenEntity.builder()
                 .user(user)
-                .tokenHash(refreshTokenStr)
+                .tokenHash(hashToken)
                 .isRevoked(false)
                 .expiresAt(Instant.now().plusMillis(refreshTokenExpirationMs))
                 .build();
@@ -186,5 +243,15 @@ public class AuthServiceImpl implements AuthService {
                 .expiresIn(accessTokenExpirationMs / 1000)
                 .user(userSummary)
                 .build();
+    }
+
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error hashing token", e);
+        }
     }
 }
