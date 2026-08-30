@@ -7,6 +7,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.security.SignatureException;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
@@ -17,6 +18,7 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -27,6 +29,7 @@ import java.util.UUID;
 public class JwtTokenProvider {
 
     private final PrivateKey privateKey;
+    @Getter
     private final PublicKey publicKey;
     private final long accessTokenExpirationMs;
     private final long refreshTokenExpirationMs;
@@ -44,8 +47,8 @@ public class JwtTokenProvider {
     }
 
     public String generateAccessToken(UserEntity user) {
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
+        Instant now = Instant.now();
+        Instant expiryDate = now.plusMillis(accessTokenExpirationMs);
 
         List<String> authorities = user.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -56,21 +59,26 @@ public class JwtTokenProvider {
                 .claim("email", user.getEmail())
                 .claim("phoneNumber", user.getPhoneNumber())
                 .claim("authorities", authorities)
-                .issuedAt(now)
-                .expiration(expiryDate)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiryDate))
                 .signWith(privateKey, Jwts.SIG.RS256)
                 .compact();
     }
 
     public String generateRefreshToken(UserEntity user) {
-        Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
+        Instant now = Instant.now();
+        Instant expiryDate = now.plusMillis(refreshTokenExpirationMs);
+        return generateRefreshTokenWithExpiry(user, expiryDate);
+    }
 
+
+    public String generateRefreshTokenWithExpiry(UserEntity user, Instant expiryInstant) {
+        Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getId().toString())
                 .id(UUID.randomUUID().toString())
-                .issuedAt(now)
-                .expiration(expiryDate)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiryInstant))
                 .signWith(privateKey, Jwts.SIG.RS256)
                 .compact();
     }
@@ -107,8 +115,6 @@ public class JwtTokenProvider {
         String cleanPem = keyPem
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
-                .replaceAll("\\r", "")
-                .replaceAll("\\n", "")
                 .replaceAll("\\s+", "");
         byte[] encoded = Base64.getDecoder().decode(cleanPem);
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");
@@ -119,8 +125,6 @@ public class JwtTokenProvider {
         String cleanPem = keyPem
                 .replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")
-                .replaceAll("\\r", "")
-                .replaceAll("\\n", "")
                 .replaceAll("\\s+", "");
         byte[] encoded = Base64.getDecoder().decode(cleanPem);
         KeyFactory keyFactory = KeyFactory.getInstance("RSA");

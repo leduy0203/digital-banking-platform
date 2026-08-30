@@ -12,9 +12,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.UUID;
 
-@Slf4j
+
 @Component
 @RequiredArgsConstructor
+@Slf4j(topic = "SECURITY-UTILS")
 public class SecurityUtils {
 
     private final UserRepository userRepository;
