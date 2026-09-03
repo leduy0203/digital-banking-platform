@@ -1,12 +1,11 @@
 package com.digitalbanking.controller;
 
-import com.digitalbanking.domain.dto.request.LoginRequest;
-import com.digitalbanking.domain.dto.request.RefreshTokenRequest;
-import com.digitalbanking.domain.dto.request.RegisterRequest;
+import com.digitalbanking.domain.dto.request.*;
 import com.digitalbanking.domain.dto.response.ApiResponse;
 import com.digitalbanking.domain.dto.response.AuthResponse;
 import com.digitalbanking.domain.dto.response.RegisterResponse;
 import com.digitalbanking.service.AuthService;
+import com.digitalbanking.service.OtpService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final OtpService otpService;
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -62,5 +62,25 @@ public class AuthController {
             authService.logout(request.getRefreshToken());
         }
         return ApiResponse.ok("Logged out successfully");
+    }
+
+
+    @PostMapping("/send-otp")
+    public ApiResponse<Void> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        log.info("Sending OTP to email !!");
+
+        otpService.sendOtp(request);
+
+        return ApiResponse.ok("OTP has been sent successfully");
+    }
+
+
+    @PostMapping("/verify-otp")
+    public ApiResponse<Boolean> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        log.info("Verify OTP to email !! ");
+
+        boolean isValid = otpService.verifyOtp(request);
+
+        return ApiResponse.ok("OTP verified successfully", isValid);
     }
 }

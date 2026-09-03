@@ -22,8 +22,7 @@ public enum ErrorCode {
     TOKEN_EXPIRED("AUTH_004", "Authentication token has expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_INVALID("AUTH_005", "Refresh token is invalid or expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("AUTH_006", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
-    INVALID_OTP("AUTH_007", "Invalid or expired OTP code", HttpStatus.BAD_REQUEST),
-    OTP_MAX_ATTEMPTS_EXCEEDED("AUTH_008", "Maximum OTP verification attempts exceeded", HttpStatus.BAD_REQUEST),
+
 
     // 3. USER & CUSTOMER
 
@@ -55,7 +54,15 @@ public enum ErrorCode {
 
     CARD_NOT_FOUND("CARD_001", "Bank card not found", HttpStatus.NOT_FOUND),
     CARD_LOCKED("CARD_002", "Bank card is locked", HttpStatus.BAD_REQUEST),
-    INVALID_PIN("CARD_003", "Invalid card PIN", HttpStatus.BAD_REQUEST);
+    INVALID_PIN("CARD_003", "Invalid card PIN", HttpStatus.BAD_REQUEST),
+
+    // 7. OTP
+
+    OTP_NOT_FOUND("OTP_001", "OTP not found", HttpStatus.NOT_FOUND),
+    OTP_EXPIRED("OTP_002", "OTP has expired", HttpStatus.BAD_REQUEST),
+    OTP_INVALID("OTP_003", "Invalid OTP", HttpStatus.BAD_REQUEST),
+    INVALID_OTP("OTP_004", "Invalid or expired OTP code", HttpStatus.BAD_REQUEST),
+    OTP_MAX_ATTEMPTS_EXCEEDED("OTP_005", "Maximum OTP verification attempts exceeded", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;
