@@ -28,6 +28,10 @@ import java.util.UUID;
 @Component
 public class JwtTokenProvider {
 
+    public static final String CLAIM_TOKEN_TYPE = "token_type";
+    public static final String TYPE_ACCESS = "ACCESS_TOKEN";
+    public static final String TYPE_REFRESH = "REFRESH_TOKEN";
+
     private final PrivateKey privateKey;
     @Getter
     private final PublicKey publicKey;
@@ -56,6 +60,7 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(user.getId().toString())
+                .claim(CLAIM_TOKEN_TYPE, TYPE_ACCESS)
                 .claim("email", user.getEmail())
                 .claim("phoneNumber", user.getPhoneNumber())
                 .claim("authorities", authorities)
@@ -76,6 +81,7 @@ public class JwtTokenProvider {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(user.getId().toString())
+                .claim(CLAIM_TOKEN_TYPE, TYPE_REFRESH)
                 .id(UUID.randomUUID().toString())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiryInstant))

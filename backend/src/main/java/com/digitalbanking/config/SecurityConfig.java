@@ -1,5 +1,7 @@
 package com.digitalbanking.config;
 
+import com.digitalbanking.exception.ErrorCode;
+import com.digitalbanking.exception.InvalidTokenTypeException;
 import com.digitalbanking.security.CustomAccessDeniedHandler;
 import com.digitalbanking.security.CustomAuthenticationEntryPoint;
 import com.digitalbanking.security.JwtTokenProvider;
@@ -15,9 +17,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
+import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
@@ -26,6 +31,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 import java.security.interfaces.RSAPublicKey;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Configuration
 @EnableWebSecurity
@@ -60,16 +67,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(authenticationEntryPoint)
-                        .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(WHITE_LIST).permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(
-                        oauth2 -> oauth2.jwt(jwt -> jwt
-                        .jwtAuthenticationConverter(jwtAuthenticationConverter())
-                ));
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .accessDeniedHandler(accessDeniedHandler)
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                );
 
         return http.build();
     }
@@ -81,12 +86,32 @@ public class SecurityConfig {
 
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-        authoritiesConverter.setAuthoritiesClaimName("authorities");
-        authoritiesConverter.setAuthorityPrefix("");
-
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            // Get token type
+            String tokenType = jwt.getClaimAsString("token_type");
+
+            // if is not access_token then return exception
+            if (!"ACCESS_TOKEN".equals(tokenType)) {
+                OAuth2Error error = new OAuth2Error(
+                        ErrorCode.UNAUTHENTICATED.getCode(),
+                        "Only ACCESS_TOKEN is allowed for API requests",
+                        null
+                );
+                throw new OAuth2AuthenticationException(error);
+            }
+
+            List<String> authorities = jwt.getClaimAsStringList("authorities");
+            if (authorities == null) {
+                return java.util.Collections.emptyList();
+            }
+
+            return authorities.stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .collect(Collectors.toList());
+        });
+
         return converter;
     }
 

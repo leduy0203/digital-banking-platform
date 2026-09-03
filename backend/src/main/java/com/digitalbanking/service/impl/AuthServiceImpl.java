@@ -217,7 +217,7 @@ public class AuthServiceImpl implements AuthService {
                 : Instant.now().plusMillis(refreshTokenExpirationMs);
 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
-        String refreshTokenStr = jwtTokenProvider.generateRefreshToken(user);
+        String refreshTokenStr = jwtTokenProvider.generateRefreshTokenWithExpiry(user , expiry);
 
         String hashToken = hashToken(refreshTokenStr);
 
