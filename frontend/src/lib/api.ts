@@ -13,6 +13,8 @@ import { mockCustomerAccounts, mockBeneficiaries } from './mock/customerData';
 
 export { employeeApi } from './api/employeeApi';
 export { adminApi } from './api/adminApi';
+export { authApi } from './api/authApi';
+export type { RegisterPayload, RegisterResponse, SendOtpPayload, SendOtpResponse, VerifyOtpPayload, VerifyOtpResponse } from './api/authApi';
 
 export * from './types/employee';
 export * from './types/admin';

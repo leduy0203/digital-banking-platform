@@ -68,6 +68,10 @@ public class AuthServiceImpl implements AuthService {
     public RegisterResponse register(RegisterRequest request) {
         log.info("Registering user with email: {}", request.getEmail());
 
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
+            throw new BusinessException(ErrorCode.PASSWORD_NOT_MATCH);
+        }
+
         if (userRepository.existsByEmail(request.getEmail())) {
             log.warn("User with email {} already exists", request.getEmail());
             throw new BusinessException(ErrorCode.EMAIL_ALREADY_EXISTS);

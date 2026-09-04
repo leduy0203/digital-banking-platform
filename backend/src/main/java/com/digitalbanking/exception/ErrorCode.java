@@ -22,6 +22,7 @@ public enum ErrorCode {
     TOKEN_EXPIRED("AUTH_004", "Authentication token has expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_INVALID("AUTH_005", "Refresh token is invalid or expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("AUTH_006", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
+    PASSWORD_NOT_MATCH("AUTH_007", "Confirm password does not match", HttpStatus.BAD_REQUEST),
 
 
     // 3. USER & CUSTOMER
