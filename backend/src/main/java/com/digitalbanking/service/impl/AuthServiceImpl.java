@@ -3,12 +3,14 @@ package com.digitalbanking.service.impl;
 import com.digitalbanking.domain.dto.request.LoginRequest;
 import com.digitalbanking.domain.dto.request.RefreshTokenRequest;
 import com.digitalbanking.domain.dto.request.RegisterRequest;
+import com.digitalbanking.domain.dto.request.SendOtpRequest;
 import com.digitalbanking.domain.dto.response.AuthResponse;
 import com.digitalbanking.domain.dto.response.RegisterResponse;
 import com.digitalbanking.domain.entity.CustomerEntity;
 import com.digitalbanking.domain.entity.RefreshTokenEntity;
 import com.digitalbanking.domain.entity.RoleEntity;
 import com.digitalbanking.domain.entity.UserEntity;
+import com.digitalbanking.domain.enums.OtpPurpose;
 import com.digitalbanking.domain.enums.UserRole;
 import com.digitalbanking.domain.enums.UserStatus;
 import com.digitalbanking.exception.BusinessException;
@@ -19,6 +21,7 @@ import com.digitalbanking.repository.RoleRepository;
 import com.digitalbanking.repository.UserRepository;
 import com.digitalbanking.security.JwtTokenProvider;
 import com.digitalbanking.service.AuthService;
+import com.digitalbanking.service.OtpService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -50,6 +53,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final OtpService otpService;
 
 
     @Value("${app.security.jwt.refresh-token-expiration-ms:604800000}")
@@ -74,55 +78,33 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.PHONE_NUMBER_ALREADY_EXISTS);
         }
 
-        if (customerRepository.existsByNationalId(request.getNationalId())) {
-            log.warn("Customer registration failed: national ID already exists");
-            throw new BusinessException(ErrorCode.NATIONAL_ID_ALREADY_EXISTS);
-        }
-
         RoleEntity customerRole = roleRepository
                 .findByRoleCode(UserRole.ROLE_CUSTOMER)
-                .orElseThrow(() -> {
-                    log.info("Role with code ROLE_CUSTOMER not found");
-                    return new BusinessException(ErrorCode.ROLE_NOT_FOUND);
-                });
-
-        Set<RoleEntity> roles = new HashSet<>();
-        roles.add(customerRole);
+                .orElseThrow(() -> new BusinessException(ErrorCode.ROLE_NOT_FOUND));
 
         UserEntity user = UserEntity.builder()
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .phoneNumber(request.getPhoneNumber())
-                .roles(roles)
+                .roles(Set.of(customerRole))
+                .status(UserStatus.PENDING)
                 .build();
 
         UserEntity savedUser = userRepository.save(user);
         log.info("User registered successfully with id={}", savedUser.getId());
 
 
-        String shortUuid = UUID.randomUUID().toString()
-                .replace("-", "")
-                .substring(0, 10)
-                .toUpperCase();
+        SendOtpRequest otpRequest = new SendOtpRequest();
+        otpRequest.setEmail(savedUser.getEmail());
+        otpRequest.setPurpose(OtpPurpose.EMAIL_VERIFICATION);
 
-
-        CustomerEntity customer = CustomerEntity.builder()
-                .user(savedUser)
-                .customerCode("CUST-" + shortUuid)
-                .nationalId(request.getNationalId())
-                .fullName(request.getFullName())
-                .build();
-
-
-        customerRepository.save(customer);
-        log.info("Customer registered successfully with id={}", savedUser.getId());
+        otpService.sendOtp(otpRequest);
+        log.info("OTP Sent successfully with id={}", savedUser.getId());
 
         return RegisterResponse.builder()
                 .userId(savedUser.getId())
                 .email(savedUser.getEmail())
                 .phoneNumber(savedUser.getPhoneNumber())
-                .fullName(customer.getFullName())
-                .customerCode(customer.getCustomerCode())
                 .build();
     }
 

@@ -1,7 +1,9 @@
 package com.digitalbanking.domain.dto.request;
 
+import com.digitalbanking.domain.enums.OtpPurpose;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,6 +14,6 @@ public class SendOtpRequest {
     @Email(message = "Invalid email format")
     private String email;
 
-    @NotBlank(message = "Purpose is required")
-    private String purpose;
+    @NotNull(message = "Purpose is required")
+    private OtpPurpose purpose;
 }

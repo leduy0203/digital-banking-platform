@@ -4,6 +4,8 @@ import com.digitalbanking.domain.dto.request.SendOtpRequest;
 import com.digitalbanking.domain.dto.request.VerifyOtpRequest;
 import com.digitalbanking.domain.entity.OtpCodeEntity;
 import com.digitalbanking.domain.entity.UserEntity;
+import com.digitalbanking.domain.enums.OtpPurpose;
+import com.digitalbanking.domain.enums.UserStatus;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
 import com.digitalbanking.repository.OtpCodeRepository;
@@ -92,6 +94,11 @@ public class OtpServiceImpl implements OtpService {
 
         otpCode.setIsUsed(true);
         otpCodeRepository.save(otpCode);
+
+        if (OtpPurpose.EMAIL_VERIFICATION.equals(request.getPurpose())) {
+            user.setStatus(UserStatus.ACTIVE);
+            userRepository.save(user);
+        }
 
         return true;
     }

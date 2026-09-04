@@ -1,5 +1,6 @@
 package com.digitalbanking.domain.entity;
 
+import com.digitalbanking.domain.enums.OtpPurpose;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -22,7 +23,8 @@ public class OtpCodeEntity {
     private UUID id;
 
     @Column(name = "purpose", nullable = false, length = 50)
-    private String purpose;
+    @Enumerated(EnumType.STRING)
+    private OtpPurpose purpose;
 
     @Column(name = "code_hash", nullable = false, length = 255)
     private String codeHash;

@@ -62,7 +62,9 @@ public enum ErrorCode {
     OTP_EXPIRED("OTP_002", "OTP has expired", HttpStatus.BAD_REQUEST),
     OTP_INVALID("OTP_003", "Invalid OTP", HttpStatus.BAD_REQUEST),
     INVALID_OTP("OTP_004", "Invalid or expired OTP code", HttpStatus.BAD_REQUEST),
-    OTP_MAX_ATTEMPTS_EXCEEDED("OTP_005", "Maximum OTP verification attempts exceeded", HttpStatus.BAD_REQUEST);
+    OTP_MAX_ATTEMPTS_EXCEEDED("OTP_005", "Maximum OTP verification attempts exceeded", HttpStatus.BAD_REQUEST),
+    EMAIL_SEND_FAILED("EMAIL_001", "Failed to send verification email. Please try again later.", HttpStatus.SERVICE_UNAVAILABLE),
+    EXTERNAL_SERVICE_ERROR("SYS_004", "External service is currently unavailable.", HttpStatus.BAD_GATEWAY);
 
     private final String code;
     private final String message;
