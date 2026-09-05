@@ -28,6 +28,7 @@ public class AuthResponse {
         private String email;
         private String phoneNumber;
         private String fullName;
+        private boolean isProfileCompleted;
         private Set<String> roles;
     }
 }

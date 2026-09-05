@@ -6,19 +6,13 @@ import com.digitalbanking.domain.dto.request.RegisterRequest;
 import com.digitalbanking.domain.dto.request.SendOtpRequest;
 import com.digitalbanking.domain.dto.response.AuthResponse;
 import com.digitalbanking.domain.dto.response.RegisterResponse;
-import com.digitalbanking.domain.entity.CustomerEntity;
-import com.digitalbanking.domain.entity.RefreshTokenEntity;
-import com.digitalbanking.domain.entity.RoleEntity;
-import com.digitalbanking.domain.entity.UserEntity;
+import com.digitalbanking.domain.entity.*;
 import com.digitalbanking.domain.enums.OtpPurpose;
 import com.digitalbanking.domain.enums.UserRole;
 import com.digitalbanking.domain.enums.UserStatus;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
-import com.digitalbanking.repository.CustomerRepository;
-import com.digitalbanking.repository.RefreshTokenRepository;
-import com.digitalbanking.repository.RoleRepository;
-import com.digitalbanking.repository.UserRepository;
+import com.digitalbanking.repository.*;
 import com.digitalbanking.security.JwtTokenProvider;
 import com.digitalbanking.service.AuthService;
 import com.digitalbanking.service.OtpService;
@@ -36,10 +30,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +42,7 @@ public class AuthServiceImpl implements AuthService {
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final CustomerRepository customerRepository;
+    private final EmployeeRepository employeeRepository;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -126,15 +119,35 @@ public class AuthServiceImpl implements AuthService {
 
         UserEntity user = (UserEntity) authentication.getPrincipal();
 
-        CustomerEntity customer = customerRepository.findByUserId(user.getId())
-                .orElseThrow(() -> {
-                    log.error("Data integrity error: Customer profile missing for user ID {}", user.getId());
-                    return new BusinessException(ErrorCode.CUSTOMER_NOT_FOUND);
-                });
+        Set<String> roleCodes = user.getRoles().stream()
+                .map(role -> role.getRoleCode().toString())
+                .collect(Collectors.toSet());
 
-        log.info("User ID {} ({}) logged in successfully", user.getId(), customer.getFullName());
+        String fullName = null;
+        boolean isProfileCompleted = false;
 
-        return generateTokensAndBuildResponse(user, customer.getFullName() , null);
+        if (roleCodes.contains(UserRole.ROLE_CUSTOMER.name())) {
+            // if user is customer
+            Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
+
+            if (customerOpt.isPresent()) {
+                fullName = customerOpt.get().getFullName();
+                isProfileCompleted = true;
+            }
+        } else if (roleCodes.contains(UserRole.ROLE_TELLER.name()) ||
+                roleCodes.contains(UserRole.ROLE_ADMIN.name())) {
+
+            // if user is employee or admin
+            Optional<EmployeeEntity> employeeOpt = employeeRepository.findByUserId(user.getId());
+
+            fullName = employeeOpt.map(EmployeeEntity::getFullName).orElse("System Administrator");
+            isProfileCompleted = true;
+        }
+
+
+        log.info("User ID {} ({}) logged in successfully with roles {}", user.getId(), fullName, roleCodes);
+
+        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, null);
     }
 
 
@@ -172,8 +185,11 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
-        CustomerEntity customer = customerRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new BusinessException(ErrorCode.CUSTOMER_NOT_FOUND));
+        Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
+
+        String fullName = customerOpt.map(CustomerEntity::getFullName).orElse(null);
+
+        boolean isProfileCompleted = customerOpt.isPresent();
 
         //get expires of old token
         Instant originalExpiresAt = tokenEntity.getExpiresAt();
@@ -185,17 +201,39 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.save(tokenEntity);
 
-        return generateTokensAndBuildResponse(user, customer.getFullName() , originalExpiresAt);
+        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, originalExpiresAt);
     }
 
 
     @Override
+    @Transactional
     public void logout(String refreshToken) {
+        log.info("Processing logout request for refresh token");
 
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+
+        String hashedToken = hashToken(refreshToken);
+        Optional<RefreshTokenEntity> tokenOpt = refreshTokenRepository.findByTokenHash(hashedToken);
+
+        if (tokenOpt.isPresent()) {
+            RefreshTokenEntity tokenEntity = tokenOpt.get();
+
+            tokenEntity.setIsRevoked(true);
+            refreshTokenRepository.save(tokenEntity);
+
+            log.info("Successfully revoked refresh token on logout for user ID: {}", tokenEntity.getUser().getId());
+        }
     }
 
 
-    private AuthResponse generateTokensAndBuildResponse(UserEntity user, String fullName, Instant originalExpiresAt) {
+    private AuthResponse generateTokensAndBuildResponse(
+            UserEntity user,
+            String fullName,
+            boolean isProfileCompleted ,
+            Instant originalExpiresAt
+    ) {
         log.info("Generating tokens for user with email: {}", user.getEmail());
 
         Instant expiry = (originalExpiresAt != null)
@@ -227,6 +265,7 @@ public class AuthServiceImpl implements AuthService {
                 .email(user.getEmail())
                 .phoneNumber(user.getPhoneNumber())
                 .fullName(fullName)
+                .isProfileCompleted(isProfileCompleted)
                 .roles(roles)
                 .build();
 

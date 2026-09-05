@@ -42,6 +42,9 @@ public class UserEntity extends BaseEntity implements UserDetails {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
     private CustomerEntity customer;
 
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)
+    private EmployeeEntity employee;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
