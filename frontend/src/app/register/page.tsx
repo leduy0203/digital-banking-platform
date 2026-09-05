@@ -21,7 +21,9 @@ import {
   RefreshCw,
   AlertCircle,
   KeyRound,
-  Loader2
+  Loader2,
+  MapPin,
+  Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,8 +51,10 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [dob, setDob] = useState('');
   const [idNumber, setIdNumber] = useState('');
+  const [address, setAddress] = useState('');
   const [frontUploaded, setFrontUploaded] = useState(false);
   const [backUploaded, setBackUploaded] = useState(false);
+  const [selfieUploaded, setSelfieUploaded] = useState(false);
 
   // Final Account State (Step 4)
   const [newAccountNumber] = useState('9333' + Math.floor(100000 + Math.random() * 900000));
@@ -92,7 +96,7 @@ export default function RegisterPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!email || !phone || !password) {
+    if (!email || !phone || !password || !confirmPassword) {
       setErrorMessage('Vui lòng điền đầy đủ các thông tin bắt buộc.');
       return;
     }
@@ -109,6 +113,7 @@ export default function RegisterPage() {
         email: email.trim(),
         phoneNumber: phone.trim(),
         password: password,
+        confirmPassword: confirmPassword,
       });
 
       if (res && res.success) {
@@ -120,17 +125,8 @@ export default function RegisterPage() {
         setErrorMessage(res?.message || 'Đăng ký không thành công. Vui lòng thử lại.');
       }
     } catch (err: any) {
-      // Fallback for demo/offline mock mode
-      const errorText = err.response?.data?.message || err.message || 'Không thể kết nối đến máy chủ API.';
-      setErrorMessage(`${errorText} (Đang chuyển sang chế độ hỗ trợ thử nghiệm).`);
-
-      // Allow proceeding in fallback mode after displaying notice
-      setTimeout(() => {
-        setUserId('demo-user-' + Date.now());
-        startOtpTimer();
-        setCurrentStep(2);
-        setErrorMessage(null);
-      }, 1200);
+      const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể kết nối đến máy chủ API.';
+      setErrorMessage(errorText);
     } finally {
       setIsLoading(false);
     }
@@ -163,13 +159,8 @@ export default function RegisterPage() {
         setErrorMessage(res?.message || 'Mã OTP không chính xác hoặc đã hết hạn.');
       }
     } catch (err: any) {
-      const errorText = err.response?.data?.message || err.message || 'Xác nhận OTP thất bại.';
-      setErrorMessage(`${errorText} (Dùng mã OTP thử nghiệm để tiếp tục).`);
-
-      setTimeout(() => {
-        setCurrentStep(3);
-        setErrorMessage(null);
-      }, 1000);
+      const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Mã OTP không chính xác hoặc đã hết hạn.';
+      setErrorMessage(errorText);
     } finally {
       setIsLoading(false);
     }
@@ -196,8 +187,8 @@ export default function RegisterPage() {
         setErrorMessage(res?.message || 'Gửi lại mã OTP thất bại.');
       }
     } catch (err: any) {
-      setSuccessMessage('Mã OTP mới đã được khởi tạo gửi lại thành công.');
-      startOtpTimer();
+      const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Gửi lại mã OTP thất bại.';
+      setErrorMessage(errorText);
     } finally {
       setIsLoading(false);
     }
@@ -206,8 +197,12 @@ export default function RegisterPage() {
   // STEP 3: Complete eKYC
   const handleEkycSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !idNumber) {
-      setErrorMessage('Vui lòng điền đầy đủ thông tin Họ tên và Số CCCD.');
+    if (!fullName.trim() || !idNumber.trim() || !dob || !address.trim()) {
+      setErrorMessage('Vui lòng điền đầy đủ Họ tên, Số CCCD, Ngày sinh và Địa chỉ thường trú.');
+      return;
+    }
+    if (!frontUploaded || !backUploaded || !selfieUploaded) {
+      setErrorMessage('Vui lòng tải lên đủ 3 ảnh: Mặt trước CCCD, Mặt sau CCCD và Ảnh chân dung.');
       return;
     }
     setErrorMessage(null);
@@ -294,7 +289,7 @@ export default function RegisterPage() {
                   <Input
                     type="email"
                     required
-                    placeholder="example@gmail.com"
+                    placeholder="nguyenvana@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white rounded-2xl h-13 text-sm pl-11"
@@ -309,7 +304,7 @@ export default function RegisterPage() {
                   <Input
                     type="tel"
                     required
-                    placeholder="0123456xxx"
+                    placeholder="0912345678"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-mono rounded-2xl h-13 text-sm pl-11"
@@ -325,7 +320,7 @@ export default function RegisterPage() {
                     <Input
                       type={showPassword ? "text" : "password"}
                       required
-                      placeholder="Mật khẩu"
+                      placeholder="Nhập mật khẩu"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-mono rounded-2xl h-13 text-sm pr-10"
@@ -410,7 +405,7 @@ export default function RegisterPage() {
                   type="text"
                   required
                   maxLength={6}
-                  placeholder="282235"
+                  placeholder="123456"
                   value={otpCode}
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                   className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-mono font-black text-center text-2xl tracking-[0.5em] rounded-2xl h-16"
@@ -463,7 +458,7 @@ export default function RegisterPage() {
           <form onSubmit={handleEkycSubmit} className="w-full bg-[#141C2E] border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-5 animate-in fade-in duration-200">
             <div className="border-b border-slate-800 pb-3 space-y-1">
               <h2 className="text-2xl font-black text-white">Định Danh eKYC Trực Tuyến</h2>
-              <p className="text-xs text-slate-400">Xác minh giấy tờ tùy thân CCCD / CMND chính chủ</p>
+              <p className="text-xs text-slate-400">Xác minh giấy tờ tùy thân CCCD / CMND và ảnh chụp khuôn mặt chính chủ</p>
             </div>
 
             <div className="space-y-4">
@@ -473,7 +468,7 @@ export default function RegisterPage() {
                   <Input
                     type="text"
                     required
-                    placeholder="LE CONG DUY"
+                    placeholder="NGUYEN VAN A"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value.toUpperCase())}
                     className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-bold rounded-2xl h-13 text-sm pl-11 uppercase"
@@ -490,7 +485,7 @@ export default function RegisterPage() {
                       type="text"
                       required
                       maxLength={12}
-                      placeholder="033343651399"
+                      placeholder="001200012345"
                       value={idNumber}
                       onChange={(e) => setIdNumber(e.target.value.replace(/\D/g, ''))}
                       className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-mono font-bold rounded-2xl h-13 text-sm pl-11"
@@ -504,6 +499,7 @@ export default function RegisterPage() {
                   <div className="relative">
                     <Input
                       type="date"
+                      required
                       value={dob}
                       onChange={(e) => setDob(e.target.value)}
                       className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white rounded-2xl h-13 text-sm pl-11"
@@ -513,30 +509,64 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Upload ID Card Photo Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div
-                  onClick={() => setFrontUploaded(!frontUploaded)}
-                  className={`p-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${frontUploaded
-                    ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
-                    : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
-                    }`}
-                >
-                  {frontUploaded ? <CheckCircle2 className="w-8 h-8 text-[#A3E635]" /> : <Upload className="w-8 h-8" />}
-                  <span className="text-xs font-bold text-white">Mặt trước CCCD</span>
-                  <span className="text-[10px] text-slate-400">{frontUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh lên'}</span>
+              {/* Input Address */}
+              <div className="space-y-1.5">
+                <label className="text-xs text-slate-400 font-semibold">Địa chỉ thường trú / Nơi ở hiện tại</label>
+                <div className="relative">
+                  <Input
+                    type="text"
+                    required
+                    placeholder="Số 123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white rounded-2xl h-13 text-sm pl-11"
+                  />
+                  <MapPin className="w-4 h-4 absolute left-4 top-4 text-slate-400" />
                 </div>
+              </div>
 
-                <div
-                  onClick={() => setBackUploaded(!backUploaded)}
-                  className={`p-5 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${backUploaded
-                    ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
-                    : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
-                    }`}
-                >
-                  {backUploaded ? <CheckCircle2 className="w-8 h-8 text-[#A3E635]" /> : <Upload className="w-8 h-8" />}
-                  <span className="text-xs font-bold text-white">Mặt sau CCCD</span>
-                  <span className="text-[10px] text-slate-400">{backUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh lên'}</span>
+              {/* Upload ID Card & Selfie Photo Cards (3 items) */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-xs text-slate-400 font-semibold">Giấy tờ định danh & Ảnh chân dung</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Mặt trước */}
+                  <div
+                    onClick={() => setFrontUploaded(!frontUploaded)}
+                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${frontUploaded
+                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                      }`}
+                  >
+                    {frontUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Upload className="w-7 h-7" />}
+                    <span className="text-xs font-bold text-white">Mặt trước CCCD</span>
+                    <span className="text-[10px] text-slate-400">{frontUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh'}</span>
+                  </div>
+
+                  {/* Mặt sau */}
+                  <div
+                    onClick={() => setBackUploaded(!backUploaded)}
+                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${backUploaded
+                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                      }`}
+                  >
+                    {backUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Upload className="w-7 h-7" />}
+                    <span className="text-xs font-bold text-white">Mặt sau CCCD</span>
+                    <span className="text-[10px] text-slate-400">{backUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh'}</span>
+                  </div>
+
+                  {/* Ảnh selfie */}
+                  <div
+                    onClick={() => setSelfieUploaded(!selfieUploaded)}
+                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${selfieUploaded
+                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                      }`}
+                  >
+                    {selfieUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Camera className="w-7 h-7" />}
+                    <span className="text-xs font-bold text-white">Ảnh chân dung</span>
+                    <span className="text-[10px] text-slate-400">{selfieUploaded ? 'Đã tải lên ✓' : 'Chụp/Tải selfie'}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -585,6 +615,10 @@ export default function RegisterPage() {
               <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
                 <span className="text-slate-400">Email đăng ký:</span>
                 <span className="font-medium text-white">{email}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
+                <span className="text-slate-400">Địa chỉ thường trú:</span>
+                <span className="font-medium text-white">{address}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
                 <span className="text-slate-400">Xác thực OTP Gmail:</span>
