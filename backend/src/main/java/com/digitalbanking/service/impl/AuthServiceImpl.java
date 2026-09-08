@@ -1,9 +1,6 @@
 package com.digitalbanking.service.impl;
 
-import com.digitalbanking.domain.dto.request.LoginRequest;
-import com.digitalbanking.domain.dto.request.RefreshTokenRequest;
-import com.digitalbanking.domain.dto.request.RegisterRequest;
-import com.digitalbanking.domain.dto.request.SendOtpRequest;
+import com.digitalbanking.domain.dto.request.*;
 import com.digitalbanking.domain.dto.response.AuthResponse;
 import com.digitalbanking.domain.dto.response.RegisterResponse;
 import com.digitalbanking.domain.entity.*;
@@ -225,6 +222,27 @@ public class AuthServiceImpl implements AuthService {
 
             log.info("Successfully revoked refresh token on logout for user ID: {}", tokenEntity.getUser().getId());
         }
+    }
+
+    @Override
+    public AuthResponse verifyOtp(VerifyOtpRequest request) {
+        log.info("Verifying OTP for email: {}", request.getEmail());
+
+        boolean isValid = otpService.verifyOtp(request);
+        if (!isValid) {
+            throw new BusinessException(ErrorCode.INVALID_OTP);
+        }
+
+        UserEntity user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+
+        Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
+        String fullName = customerOpt.map(CustomerEntity::getFullName).orElse(null);
+
+        boolean isProfileCompleted = customerOpt.isPresent();
+        log.info("User {} verified OTP successfully, generating tokens", user.getEmail());
+
+        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, null);
     }
 
 

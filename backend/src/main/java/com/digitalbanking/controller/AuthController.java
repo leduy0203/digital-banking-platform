@@ -76,11 +76,11 @@ public class AuthController {
 
 
     @PostMapping("/verify-otp")
-    public ApiResponse<Boolean> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        log.info("Verify OTP to email !! ");
+    public ApiResponse<AuthResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        log.info("Verify OTP for email: {}", request.getEmail());
 
-        boolean isValid = otpService.verifyOtp(request);
+        AuthResponse response = authService.verifyOtp(request);
 
-        return ApiResponse.ok("OTP verified successfully", isValid);
+        return ApiResponse.ok("OTP verified successfully", response);
     }
 }

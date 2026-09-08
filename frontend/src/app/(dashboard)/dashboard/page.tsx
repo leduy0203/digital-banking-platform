@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Settings, 
@@ -21,14 +21,69 @@ import {
   FileSearch, 
   SlidersHorizontal,
   Sparkles,
-  Camera
+  Camera,
+  Clock,
+  AlertTriangle,
+  User,
+  Loader2
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
+import { customerApi, CustomerProfile } from "@/lib/api/customerApi";
+import { accountApi, AccountResponseData } from "@/lib/api/accountApi";
 
 export default function DashboardPage() {
-  const [showBalance, setShowBalance] = useState(false);
-  const [accountNumber] = useState("9333436513");
-  const [balance] = useState("125,500,000");
+  const [showBalance, setShowBalance] = useState(true);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [accounts, setAccounts] = useState<AccountResponseData[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    // 1. Fetch Profile
+    customerApi.getMyProfile()
+      .then((res) => {
+        if (res?.success && res.data) {
+          setProfile(res.data);
+        }
+      })
+      .catch(() => {
+        // Fallback
+      });
+
+    // 2. Fetch Accounts list via /api/v1/accounts/my-accounts
+    accountApi.getMyAccounts()
+      .then((res) => {
+        if (res?.success && res.data) {
+          setAccounts(res.data);
+        }
+      })
+      .catch(() => {
+        // Fallback
+      })
+      .finally(() => {
+        setIsLoadingAccounts(false);
+      });
+  }, []);
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'CD';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const copyAccountNumber = (accNum?: string) => {
+    if (!accNum) return;
+    navigator.clipboard.writeText(accNum);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Primary checking account or first account
+  const primaryAccount = accounts.find(a => a.accountType === 'CHECKING') || accounts[0];
+  const defaultAccountNumber = primaryAccount?.accountNumber || "9333xxxxxx";
+  const defaultBalanceFormatted = (primaryAccount?.availableBalance ?? primaryAccount?.balance ?? 0).toLocaleString('vi-VN');
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#0D1527] text-slate-100 flex font-sans selection:bg-[#A3E635] selection:text-slate-950">
@@ -37,35 +92,8 @@ export default function DashboardPage() {
 
       {/* Main Viewport Column (Fixed Header + Scrollable Body) */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        {/* Taller & Spacious Fixed Topbar (h-20) */}
-        <header className="h-20 px-8 flex items-center justify-between text-xs text-slate-300 border-b border-slate-800/80 bg-[#0D1527]/95 backdrop-blur-md shrink-0 z-30 shadow-md">
-          <div className="flex items-center gap-3 bg-[#141C2E] border border-slate-800/80 px-4 py-2 rounded-full">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-xs shadow-md">
-              CD
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-white text-sm tracking-wide">LÊ CÔNG DUY</span>
-              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
-                <ShieldCheck className="w-3 h-3" /> Tiêu chuẩn &gt;
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-8 text-sm">
-            <Link href="/settings" className="flex items-center gap-2 hover:text-white transition-colors">
-              <Settings className="w-4 h-4 text-slate-400" />
-              <span>Cài đặt</span>
-            </Link>
-            <button className="flex items-center gap-2 hover:text-white transition-colors">
-              <Globe className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-200">English</span>
-            </button>
-            <Link href="/login" className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors">
-              <Power className="w-4 h-4" />
-              <span>Đăng xuất</span>
-            </Link>
-          </div>
-        </header>
+        {/* Dynamic Connected Topbar */}
+        <CustomerTopbar />
 
         {/* Scrollable Dashboard Body */}
         <main className="flex-1 p-8 space-y-8 overflow-y-auto">
@@ -75,23 +103,50 @@ export default function DashboardPage() {
             
             {/* Top User Profile Header */}
             <div className="flex items-center justify-between z-10">
-              <div className="flex items-center gap-4 bg-slate-900/40 backdrop-blur-md p-2.5 pr-5 rounded-full border border-slate-700/60">
-                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-md">
-                  CD
-                </div>
+              <Link 
+                href="/profile"
+                className="flex items-center gap-4 bg-slate-900/50 hover:bg-slate-900/80 backdrop-blur-md p-2.5 pr-6 rounded-full border border-slate-700/60 hover:border-[#A3E635]/50 transition-all group"
+              >
+                {profile?.avatarUrl ? (
+                  <img 
+                    src={profile.avatarUrl} 
+                    alt="Avatar" 
+                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-400 shadow-md group-hover:scale-105 transition-transform" 
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-md group-hover:scale-105 transition-transform">
+                    {getInitials(profile?.fullName)}
+                  </div>
+                )}
                 <div>
-                  <h2 className="font-extrabold text-base text-white tracking-wide">LÊ CÔNG DUY</h2>
-                  <div className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Tiêu chuẩn &gt;</span>
+                  <h2 className="font-extrabold text-base text-white tracking-wide group-hover:text-[#A3E635] transition-colors">
+                    {profile?.fullName || "KHÁCH HÀNG"}
+                  </h2>
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+                    {profile?.kycStatus === 'VERIFIED' ? (
+                      <span className="text-[#A3E635] flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> eKYC Đã xác minh &gt;
+                      </span>
+                    ) : profile?.kycStatus === 'REJECTED' ? (
+                      <span className="text-red-400 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> eKYC Bị từ chối &gt;
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> eKYC Chờ xét duyệt &gt;
+                      </span>
+                    )}
                   </div>
                 </div>
-              </div>
+              </Link>
 
-              <button className="bg-slate-900/60 hover:bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-slate-200 text-xs px-4 py-2 rounded-full flex items-center gap-2 transition-all shadow-md">
-                <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Thay đổi hình nền</span>
-              </button>
+              <Link 
+                href="/profile"
+                className="bg-slate-900/60 hover:bg-slate-900/80 backdrop-blur-md border border-slate-700/60 text-slate-200 text-xs px-4 py-2 rounded-full flex items-center gap-2 transition-all shadow-md"
+              >
+                <User className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Xem hồ sơ chi tiết</span>
+              </Link>
             </div>
 
             {/* Favorite Actions Section */}
@@ -178,33 +233,42 @@ export default function DashboardPage() {
                   <div className="space-y-1">
                     <div className="text-xs text-slate-400 flex items-center justify-between">
                       <span>Số tài khoản</span>
-                      <button className="text-slate-400 hover:text-white flex items-center gap-1">
-                        <span className="font-mono font-bold text-slate-200 text-sm">{accountNumber}</span>
-                        <Copy className="w-3.5 h-3.5" />
+                      <button 
+                        onClick={() => copyAccountNumber(defaultAccountNumber)}
+                        className="text-slate-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Sao chép số tài khoản"
+                      >
+                        <span className="font-mono font-bold text-white text-sm">{defaultAccountNumber}</span>
+                        <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                        {copied && <span className="text-[10px] text-[#A3E635] font-bold">Đã chép!</span>}
                       </button>
                     </div>
 
                     <div className="text-xs text-slate-400 flex items-center justify-between pt-1">
-                      <span>Số dư</span>
+                      <span>Số dư khả dụng</span>
                       <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-emerald-400 text-base">
-                          {showBalance ? `${balance} VND` : "*** VND"}
-                        </span>
+                        {isLoadingAccounts ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-[#A3E635]" />
+                        ) : (
+                          <span className="font-mono font-bold text-[#A3E635] text-base">
+                            {showBalance ? `${defaultBalanceFormatted} VND` : "•••••••• VND"}
+                          </span>
+                        )}
                         <button 
                           onClick={() => setShowBalance(!showBalance)}
-                          className="text-slate-400 hover:text-white"
+                          className="text-slate-400 hover:text-white cursor-pointer"
                         >
-                          {showBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          {showBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4 text-emerald-400" />}
                         </button>
                       </div>
                     </div>
                   </div>
 
                   <div className="pt-2 border-t border-slate-700/60 flex items-center justify-between text-xs text-slate-300">
-                    <button className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors">
+                    <Link href="/transactions" className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors">
                       <History className="w-3.5 h-3.5" />
                       <span>Lịch sử giao dịch</span>
-                    </button>
+                    </Link>
                     <Link href="/accounts" className="flex items-center gap-1.5 hover:text-emerald-400 transition-colors">
                       <CreditCard className="w-3.5 h-3.5" />
                       <span>Tài khoản & Thẻ</span>
@@ -214,10 +278,12 @@ export default function DashboardPage() {
               </div>
 
               {/* Neon Lime Action Button */}
-              <button className="w-full mt-6 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A3E635]/20 transition-all">
-                <Plus className="w-4 h-4" />
-                <span>Mở tài khoản số chọn</span>
-              </button>
+              <Link href="/transfers" className="w-full mt-6 block">
+                <button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A3E635]/20 transition-all cursor-pointer">
+                  <ArrowRightLeft className="w-4 h-4" />
+                  <span>Chuyển tiền ngay</span>
+                </button>
+              </Link>
             </div>
 
             {/* Card 2: Personal Finance Management */}

@@ -14,21 +14,18 @@ import { mockCustomerAccounts, mockBeneficiaries } from './mock/customerData';
 export { employeeApi } from './api/employeeApi';
 export { adminApi } from './api/adminApi';
 export { authApi } from './api/authApi';
-export type { RegisterPayload, RegisterResponse, SendOtpPayload, SendOtpResponse, VerifyOtpPayload, VerifyOtpResponse } from './api/authApi';
+export { mediaApi } from './api/mediaApi';
+export { customerApi } from './api/customerApi';
+export type { RegisterPayload, RegisterResponse, SendOtpPayload, SendOtpResponse, VerifyOtpPayload, VerifyOtpResponse, LoginPayload, LoginResponse, AuthResponseData, UserSummary } from './api/authApi';
+export type { UploadKycImageResponse, KycDocType } from './api/mediaApi';
+export type { CustomerOnboardingPayload, CustomerProfile, CustomerResponse, UpdateProfilePayload } from './api/customerApi';
 
 export * from './types/employee';
 export * from './types/admin';
 
-export const accountApi = {
-  async getAccounts(): Promise<BankAccount[]> {
-    try {
-      const res = await apiClient.get<{ data: BankAccount[] }>('/accounts');
-      return res.data.data;
-    } catch {
-      return mockCustomerAccounts;
-    }
-  },
-};
+
+export { accountApi } from './api/accountApi';
+export type { AccountResponseData, AccountsListResponse } from './api/accountApi';
 
 export const transferApi = {
   async executeTransfer(payload: TransferRequest): Promise<TransferReceipt> {

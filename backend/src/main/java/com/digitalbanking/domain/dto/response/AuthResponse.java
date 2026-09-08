@@ -1,5 +1,6 @@
 package com.digitalbanking.domain.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.util.Set;
@@ -28,7 +29,11 @@ public class AuthResponse {
         private String email;
         private String phoneNumber;
         private String fullName;
+
+        @JsonProperty("isProfileCompleted")
         private boolean isProfileCompleted;
+
         private Set<String> roles;
     }
 }
+

@@ -168,10 +168,13 @@ public class CustomerServiceImpl implements CustomerService {
 
 
     private CustomerResponse mapToCustomerResponse(CustomerEntity customer) {
-
         KycStatus kycStatus = kycDocumentRepository.findTopByCustomerIdOrderBySubmittedAtDesc(customer.getId())
                 .map(KycDocumentEntity::getStatus)
                 .orElse(KycStatus.NOT_SUBMITTED);
+
+        AccountEntity defaultAccount = accountRepository
+                .findFirstByCustomerIdAndAccountTypeAndStatus(customer.getId(), AccountType.CHECKING, AccountStatus.ACTIVE)
+                .orElse(null);
 
         return CustomerResponse.builder()
                 .id(customer.getId())
@@ -182,6 +185,8 @@ public class CustomerServiceImpl implements CustomerService {
                 .address(customer.getAddress())
                 .avatarUrl(customer.getAvatarUrl())
                 .kycStatus(kycStatus)
+                .defaultAccountNumber(defaultAccount != null ? defaultAccount.getAccountNumber() : null)
+                .defaultBalance(defaultAccount != null ? defaultAccount.getBalance() : BigDecimal.ZERO)
                 .createdAt(customer.getCreatedAt())
                 .build();
     }

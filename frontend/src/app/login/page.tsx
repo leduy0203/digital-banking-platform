@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   LockKeyhole,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Phone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,8 +44,39 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // Simulate/Trigger login logic
-      router.push('/dashboard');
+      const res = await authApi.login({
+        username: username.trim(),
+        password: password,
+      });
+
+      if (res && res.success && res.data) {
+        const { accessToken, refreshToken, user } = res.data;
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('accessToken', accessToken);
+          localStorage.setItem('refreshToken', refreshToken);
+          localStorage.setItem('user', JSON.stringify(user));
+        }
+
+        const isProfileCompleted = Boolean(
+          user.isProfileCompleted ?? (user as any).profileCompleted
+        );
+
+        // Check if customer has completed eKYC onboarding
+        if (!isProfileCompleted && user.roles?.includes('ROLE_CUSTOMER')) {
+          router.push('/register?step=3');
+        } else {
+          // Check user role for proper dashboard redirection
+          if (user.roles?.includes('ROLE_ADMIN')) {
+            router.push('/admin/dashboard');
+          } else if (user.roles?.includes('ROLE_TELLER')) {
+            router.push('/employee/dashboard');
+          } else {
+            router.push('/dashboard');
+          }
+        }
+      } else {
+        setErrorMessage(res?.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.');
+      }
     } catch (err: any) {
       const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.';
       setErrorMessage(errorText);
@@ -52,6 +84,7 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen w-screen bg-[#0D1527] text-slate-100 flex font-sans selection:bg-[#A3E635] selection:text-slate-950 overflow-hidden">
@@ -153,30 +186,25 @@ export default function LoginPage() {
 
           {/* Main Login Form */}
           <form onSubmit={handleLogin} className="space-y-4">
-            {/* Input 1: Username / Email */}
+            {/* Input 1: Phone number */}
             <div className="space-y-1.5">
-              <label className="text-xs text-slate-400 font-semibold">Tên đăng nhập / Email / Số điện thoại</label>
+              <label className="text-xs text-slate-400 font-semibold">Số điện thoại</label>
               <div className="relative">
                 <Input
                   type="text"
                   required
-                  placeholder="nguyenvana@gmail.com hoặc 0912345678"
+                  placeholder="09xx xxx xxx"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="bg-[#141C2E] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-medium rounded-xl h-12 text-xs pl-10 placeholder:text-slate-500 transition-all"
+                  className="bg-[#141C2E] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-medium rounded-xl h-12 text-xs pl-10 placeholder:text-slate-500 transition-all font-mono"
                 />
-                <User className="w-4 h-4 absolute left-3.5 top-4 text-slate-400" />
+                <Phone className="w-4 h-4 absolute left-3.5 top-4 text-slate-400" />
               </div>
             </div>
 
             {/* Input 2: Password */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-slate-400 font-semibold">Mật khẩu</label>
-                <Link href="/settings/change-password" className="text-xs text-[#A3E635] hover:underline font-semibold">
-                  Quên mật khẩu?
-                </Link>
-              </div>
+              <label className="text-xs text-slate-400 font-semibold">Mật khẩu</label>
               <div className="relative">
                 <Input
                   type={showPassword ? "text" : "password"}
@@ -197,7 +225,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me Checkbox */}
+            {/* Remember Me & Forgot Password Row */}
             <div className="flex items-center justify-between pt-1 text-xs">
               <label className="flex items-center gap-2 cursor-pointer text-slate-300">
                 <input
@@ -206,8 +234,12 @@ export default function LoginPage() {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 rounded border-slate-700 bg-[#141C2E] text-[#A3E635] focus:ring-0 accent-[#A3E635]"
                 />
-                <span>Ghi nhớ đăng nhập trên thiết bị này</span>
+                <span>Ghi nhớ đăng nhập</span>
               </label>
+
+              <Link href="/settings/change-password" className="text-xs text-[#A3E635] hover:underline font-semibold">
+                Quên mật khẩu?
+              </Link>
             </div>
 
             {/* Submit Button */}

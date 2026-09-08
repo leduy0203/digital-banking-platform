@@ -1,7 +1,9 @@
 package com.digitalbanking.repository;
 
-import com.digitalbanking.domain.enums.AccountStatus;
+import com.digitalbanking.domain.dto.response.AccountResponse;
 import com.digitalbanking.domain.entity.AccountEntity;
+import com.digitalbanking.domain.enums.AccountStatus;
+import com.digitalbanking.domain.enums.AccountType;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -26,4 +28,9 @@ public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
     @Query("SELECT a FROM AccountEntity a WHERE a.accountNumber = :accountNumber")
     Optional<AccountEntity> findByAccountNumberForUpdate(@Param("accountNumber") String accountNumber);
 
+    Optional<AccountEntity> findFirstByCustomerIdAndAccountTypeAndStatus(
+            UUID id, AccountType accountType, AccountStatus accountStatus
+    );
+
+    List<AccountEntity> findByCustomerUserId(UUID currentUserId);
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Landmark,
   User,
@@ -23,14 +24,18 @@ import {
   KeyRound,
   Loader2,
   MapPin,
-  Camera
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { authApi } from '@/lib/api';
+import { authApi, mediaApi, customerApi, KycDocType, AuthResponseData } from '@/lib/api';
 
-export default function RegisterPage() {
+function RegisterContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   // Steps: 1 (Register Auth) -> 2 (Verify OTP) -> 3 (eKYC) -> 4 (Success)
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -52,24 +57,62 @@ export default function RegisterPage() {
   const [dob, setDob] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [address, setAddress] = useState('');
-  const [frontUploaded, setFrontUploaded] = useState(false);
-  const [backUploaded, setBackUploaded] = useState(false);
-  const [selfieUploaded, setSelfieUploaded] = useState(false);
+
+  // Image Upload State (URLs from Cloudinary)
+  const [frontCardUrl, setFrontCardUrl] = useState('');
+  const [backCardUrl, setBackCardUrl] = useState('');
+  const [selfieUrl, setSelfieUrl] = useState('');
+
+  // Image Previews (Local or Remote)
+  const [frontPreview, setFrontPreview] = useState<string | null>(null);
+  const [backPreview, setBackPreview] = useState<string | null>(null);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
+
+  // Individual Upload Loading State
+  const [uploadingFront, setUploadingFront] = useState(false);
+  const [uploadingBack, setUploadingBack] = useState(false);
+  const [uploadingSelfie, setUploadingSelfie] = useState(false);
+
+  // File Input References
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
   // Final Account State (Step 4)
-  const [newAccountNumber] = useState('9333' + Math.floor(100000 + Math.random() * 900000));
+  const [createdAccountNumber, setCreatedAccountNumber] = useState('');
+  const [customerCode, setCustomerCode] = useState('');
 
   // UI Status State
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Check URL params if redirected from login for eKYC step
+  useEffect(() => {
+    const stepParam = searchParams.get('step');
+    if (stepParam === '3' || stepParam === 'ekyc') {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        setCurrentStep(3);
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            if (parsed.email) setEmail(parsed.email);
+            if (parsed.phoneNumber) setPhone(parsed.phoneNumber);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+  }, [searchParams]);
+
   // Password validation checks
   const hasMinLength = password.length >= 6;
   const hasUppercase = /[A-Z]/.test(password);
   const hasLowercase = /[a-z]/.test(password);
   const hasNumber = /[0-9]/.test(password);
-  const validCount = [hasMinLength, hasUppercase, hasLowercase, hasNumber].filter(Boolean).length;
 
   // OTP Countdown Effect
   useEffect(() => {
@@ -96,8 +139,25 @@ export default function RegisterPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!email || !phone || !password || !confirmPassword) {
+    const emailTrimmed = email.trim();
+    const phoneTrimmed = phone.trim();
+
+    if (!emailTrimmed || !phoneTrimmed || !password || !confirmPassword) {
       setErrorMessage('Vui lòng điền đầy đủ các thông tin bắt buộc.');
+      return;
+    }
+
+    // Email regex validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) {
+      setErrorMessage('Địa chỉ email không đúng định dạng (ví dụ: name@gmail.com).');
+      return;
+    }
+
+    // Phone regex validation (Vietnam phone number 10 digits starting with 03, 05, 07, 08, 09 or +84)
+    const phoneRegex = /^(0[3|5|7|8|9])[0-9]{8}$/;
+    if (!phoneRegex.test(phoneTrimmed)) {
+      setErrorMessage('Số điện thoại không hợp lệ (phải gồm 10 chữ số bắt đầu bằng 03, 05, 07, 08 hoặc 09).');
       return;
     }
 
@@ -110,15 +170,15 @@ export default function RegisterPage() {
 
     try {
       const res = await authApi.register({
-        email: email.trim(),
-        phoneNumber: phone.trim(),
+        email: emailTrimmed,
+        phoneNumber: phoneTrimmed,
         password: password,
         confirmPassword: confirmPassword,
       });
 
       if (res && res.success) {
         setUserId(res.data?.userId || '');
-        setSuccessMessage('Đăng ký tài khoản thành công! Mã OTP đã được gửi đến Gmail.');
+        setSuccessMessage('Đăng ký tài khoản thành công! Mã OTP đã được gửi đến email.');
         startOtpTimer();
         setCurrentStep(2);
       } else {
@@ -138,8 +198,9 @@ export default function RegisterPage() {
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!otpCode || otpCode.length < 4) {
-      setErrorMessage('Vui lòng nhập đầy đủ mã OTP.');
+    const codeTrimmed = otpCode.trim();
+    if (!codeTrimmed || codeTrimmed.length !== 6 || !/^\d{6}$/.test(codeTrimmed)) {
+      setErrorMessage('Vui lòng nhập đúng và đủ 6 chữ số mã OTP.');
       return;
     }
 
@@ -148,11 +209,19 @@ export default function RegisterPage() {
     try {
       const res = await authApi.verifyOtp({
         email: email.trim(),
-        code: otpCode.trim(),
+        code: codeTrimmed,
         purpose: 'EMAIL_VERIFICATION',
       });
 
       if (res && res.success) {
+        // Save auth tokens to localStorage for seamless eKYC onboarding
+        if (typeof res.data === 'object' && res.data !== null && 'accessToken' in res.data) {
+          const authData = res.data as AuthResponseData;
+          localStorage.setItem('accessToken', authData.accessToken);
+          localStorage.setItem('refreshToken', authData.refreshToken);
+          localStorage.setItem('user', JSON.stringify(authData.user));
+        }
+
         setSuccessMessage('Xác thực Email OTP thành công!');
         setCurrentStep(3);
       } else {
@@ -181,7 +250,7 @@ export default function RegisterPage() {
       });
 
       if (res && res.success) {
-        setSuccessMessage('Đã gửi lại mã OTP mới đến Gmail của bạn.');
+        setSuccessMessage('Đã gửi lại mã OTP mới đến email của bạn.');
         startOtpTimer();
       } else {
         setErrorMessage(res?.message || 'Gửi lại mã OTP thất bại.');
@@ -194,19 +263,193 @@ export default function RegisterPage() {
     }
   };
 
-  // STEP 3: Complete eKYC
-  const handleEkycSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim() || !idNumber.trim() || !dob || !address.trim()) {
-      setErrorMessage('Vui lòng điền đầy đủ Họ tên, Số CCCD, Ngày sinh và Địa chỉ thường trú.');
+  // Handle Image File Selection & Immediate Cloudinary Temp Upload
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, docType: KycDocType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate size (<= 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Dung lượng ảnh không được vượt quá 5MB.');
       return;
     }
-    if (!frontUploaded || !backUploaded || !selfieUploaded) {
-      setErrorMessage('Vui lòng tải lên đủ 3 ảnh: Mặt trước CCCD, Mặt sau CCCD và Ảnh chân dung.');
-      return;
-    }
+
     setErrorMessage(null);
-    setCurrentStep(4);
+    const localUrl = URL.createObjectURL(file);
+
+    if (docType === 'front_card') {
+      setFrontPreview(localUrl);
+      setUploadingFront(true);
+    } else if (docType === 'back_card') {
+      setBackPreview(localUrl);
+      setUploadingBack(true);
+    } else {
+      setSelfiePreview(localUrl);
+      setUploadingSelfie(true);
+    }
+
+    try {
+      const res = await mediaApi.uploadKycImage(file, docType);
+      if (res && res.success && res.data?.url) {
+        if (docType === 'front_card') {
+          setFrontCardUrl(res.data.url);
+        } else if (docType === 'back_card') {
+          setBackCardUrl(res.data.url);
+        } else {
+          setSelfieUrl(res.data.url);
+        }
+      } else {
+        throw new Error(res?.message || 'Tải ảnh lên thất bại.');
+      }
+    } catch (err: any) {
+      const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể tải ảnh lên hệ thống.';
+      setErrorMessage(errorText);
+      // Revert preview on error
+      if (docType === 'front_card') {
+        setFrontPreview(null);
+        setFrontCardUrl('');
+      } else if (docType === 'back_card') {
+        setBackPreview(null);
+        setBackCardUrl('');
+      } else {
+        setSelfiePreview(null);
+        setSelfieUrl('');
+      }
+    } finally {
+      if (docType === 'front_card') setUploadingFront(false);
+      else if (docType === 'back_card') setUploadingBack(false);
+      else setUploadingSelfie(false);
+    }
+  };
+
+  // STEP 3: Complete eKYC & Customer Onboarding API
+  const handleEkycSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const fullNameTrimmed = fullName.trim();
+    const idNumberTrimmed = idNumber.trim();
+    const addressTrimmed = address.trim();
+
+    // 1. Validate Họ và tên
+    if (!fullNameTrimmed) {
+      setErrorMessage('Vui lòng nhập Họ và tên.');
+      return;
+    }
+    if (fullNameTrimmed.length < 3 || fullNameTrimmed.length > 150) {
+      setErrorMessage('Họ và tên phải từ 3 đến 150 ký tự.');
+      return;
+    }
+    if (!/^[a-zA-ZÀ-ỹ\s]+$/u.test(fullNameTrimmed)) {
+      setErrorMessage('Họ và tên chỉ được chứa chữ cái, không bao gồm số hoặc ký tự đặc biệt.');
+      return;
+    }
+    if (fullNameTrimmed.split(/\s+/).length < 2) {
+      setErrorMessage('Vui lòng nhập đầy đủ cả Họ và Tên (ít nhất 2 từ).');
+      return;
+    }
+
+    // 2. Validate CCCD 12 số
+    if (!idNumberTrimmed) {
+      setErrorMessage('Vui lòng nhập Số CCCD/CMND.');
+      return;
+    }
+    if (!/^[0-9]{12}$/.test(idNumberTrimmed)) {
+      setErrorMessage('Số CCCD/CMND phải bao gồm đúng 12 chữ số.');
+      return;
+    }
+
+    // 3. Validate Ngày sinh & Tuổi
+    if (!dob) {
+      setErrorMessage('Vui lòng chọn Ngày sinh.');
+      return;
+    }
+    const birthDate = new Date(dob);
+    const today = new Date();
+    if (isNaN(birthDate.getTime()) || birthDate >= today) {
+      setErrorMessage('Ngày sinh không hợp lệ.');
+      return;
+    }
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    if (age < 15) {
+      setErrorMessage('Khách hàng phải từ 15 tuổi trở lên để mở tài khoản ngân hàng số.');
+      return;
+    }
+
+    // 4. Validate Địa chỉ
+    if (!addressTrimmed) {
+      setErrorMessage('Vui lòng nhập Địa chỉ thường trú.');
+      return;
+    }
+    if (addressTrimmed.length < 5 || addressTrimmed.length > 255) {
+      setErrorMessage('Địa chỉ thường trú phải từ 5 đến 255 ký tự.');
+      return;
+    }
+
+    // 5. Validate Trạng thái Upload ảnh
+    if (uploadingFront || uploadingBack || uploadingSelfie) {
+      setErrorMessage('Ảnh đang được tải lên đám mây, vui lòng chờ trong giây lát.');
+      return;
+    }
+    if (!frontCardUrl) {
+      setErrorMessage('Vui lòng tải lên ảnh Mặt trước CCCD.');
+      return;
+    }
+    if (!backCardUrl) {
+      setErrorMessage('Vui lòng tải lên ảnh Mặt sau CCCD.');
+      return;
+    }
+    if (!selfieUrl) {
+      setErrorMessage('Vui lòng tải lên ảnh Chân dung khuôn mặt.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const res = await customerApi.completeOnboarding({
+        fullName: fullNameTrimmed.toUpperCase(),
+        nationalId: idNumberTrimmed,
+        dateOfBirth: dob,
+        address: addressTrimmed,
+        frontIdCardUrl: frontCardUrl,
+        backIdCardUrl: backCardUrl,
+        selfiePhotoUrl: selfieUrl,
+      });
+
+      if (res && res.success && res.data) {
+        setCreatedAccountNumber(res.data.defaultAccountNumber || '');
+        setCustomerCode(res.data.customerCode || '');
+        setSuccessMessage('Hồ sơ định danh eKYC đã được duyệt và tài khoản đã kích hoạt!');
+        
+        // Update user summary in localStorage
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            parsed.isProfileCompleted = true;
+            parsed.fullName = res.data.fullName;
+            localStorage.setItem('user', JSON.stringify(parsed));
+          } catch {
+            // ignore
+          }
+        }
+
+        setCurrentStep(4);
+      } else {
+        setErrorMessage(res?.message || 'Hoàn tất định danh thất bại.');
+      }
+    } catch (err: any) {
+      const errorText = err.response?.data?.detail || err.response?.data?.message || err.message || 'Không thể hoàn tất hồ sơ eKYC.';
+      setErrorMessage(errorText);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -525,47 +768,113 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* Hidden File Inputs */}
+              <input
+                type="file"
+                ref={frontInputRef}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => handleFileChange(e, 'front_card')}
+              />
+              <input
+                type="file"
+                ref={backInputRef}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => handleFileChange(e, 'back_card')}
+              />
+              <input
+                type="file"
+                ref={selfieInputRef}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => handleFileChange(e, 'selfie')}
+              />
+
               {/* Upload ID Card & Selfie Photo Cards (3 items) */}
               <div className="space-y-1.5 pt-1">
                 <label className="text-xs text-slate-400 font-semibold">Giấy tờ định danh & Ảnh chân dung</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  
                   {/* Mặt trước */}
                   <div
-                    onClick={() => setFrontUploaded(!frontUploaded)}
-                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${frontUploaded
-                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
-                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
-                      }`}
+                    onClick={() => !uploadingFront && frontInputRef.current?.click()}
+                    className={`p-3 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all relative overflow-hidden min-h-[130px] ${
+                      frontCardUrl
+                        ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                        : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                    }`}
                   >
-                    {frontUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Upload className="w-7 h-7" />}
-                    <span className="text-xs font-bold text-white">Mặt trước CCCD</span>
-                    <span className="text-[10px] text-slate-400">{frontUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh'}</span>
+                    {uploadingFront ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-[#A3E635]" />
+                    ) : frontPreview ? (
+                      <div className="w-full h-full flex flex-col items-center gap-1.5">
+                        <img src={frontPreview} alt="Mặt trước CCCD" className="w-full h-16 object-cover rounded-lg border border-emerald-500/50" />
+                        <span className="text-[11px] font-bold text-[#A3E635] flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Mặt trước ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-7 h-7" />
+                        <span className="text-xs font-bold text-white">Mặt trước CCCD</span>
+                        <span className="text-[10px] text-slate-400">Nhấp để tải ảnh</span>
+                      </>
+                    )}
                   </div>
 
                   {/* Mặt sau */}
                   <div
-                    onClick={() => setBackUploaded(!backUploaded)}
-                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${backUploaded
-                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
-                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
-                      }`}
+                    onClick={() => !uploadingBack && backInputRef.current?.click()}
+                    className={`p-3 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all relative overflow-hidden min-h-[130px] ${
+                      backCardUrl
+                        ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                        : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                    }`}
                   >
-                    {backUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Upload className="w-7 h-7" />}
-                    <span className="text-xs font-bold text-white">Mặt sau CCCD</span>
-                    <span className="text-[10px] text-slate-400">{backUploaded ? 'Đã tải lên ✓' : 'Nhấp để tải ảnh'}</span>
+                    {uploadingBack ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-[#A3E635]" />
+                    ) : backPreview ? (
+                      <div className="w-full h-full flex flex-col items-center gap-1.5">
+                        <img src={backPreview} alt="Mặt sau CCCD" className="w-full h-16 object-cover rounded-lg border border-emerald-500/50" />
+                        <span className="text-[11px] font-bold text-[#A3E635] flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Mặt sau ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-7 h-7" />
+                        <span className="text-xs font-bold text-white">Mặt sau CCCD</span>
+                        <span className="text-[10px] text-slate-400">Nhấp để tải ảnh</span>
+                      </>
+                    )}
                   </div>
 
                   {/* Ảnh selfie */}
                   <div
-                    onClick={() => setSelfieUploaded(!selfieUploaded)}
-                    className={`p-4 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all ${selfieUploaded
-                      ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
-                      : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
-                      }`}
+                    onClick={() => !uploadingSelfie && selfieInputRef.current?.click()}
+                    className={`p-3 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center text-center gap-2 cursor-pointer transition-all relative overflow-hidden min-h-[130px] ${
+                      selfieUrl
+                        ? 'border-[#A3E635] bg-emerald-950/40 text-[#A3E635]'
+                        : 'border-slate-700 bg-[#1A253D] text-slate-400 hover:border-slate-500'
+                    }`}
                   >
-                    {selfieUploaded ? <CheckCircle2 className="w-7 h-7 text-[#A3E635]" /> : <Camera className="w-7 h-7" />}
-                    <span className="text-xs font-bold text-white">Ảnh chân dung</span>
-                    <span className="text-[10px] text-slate-400">{selfieUploaded ? 'Đã tải lên ✓' : 'Chụp/Tải selfie'}</span>
+                    {uploadingSelfie ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-[#A3E635]" />
+                    ) : selfiePreview ? (
+                      <div className="w-full h-full flex flex-col items-center gap-1.5">
+                        <img src={selfiePreview} alt="Ảnh selfie" className="w-full h-16 object-cover rounded-lg border border-emerald-500/50" />
+                        <span className="text-[11px] font-bold text-[#A3E635] flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Chân dung ✓
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <Camera className="w-7 h-7" />
+                        <span className="text-xs font-bold text-white">Ảnh chân dung</span>
+                        <span className="text-[10px] text-slate-400">Chụp/Tải selfie</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -582,9 +891,17 @@ export default function RegisterPage() {
               </Button>
               <Button
                 type="submit"
-                className="flex-1 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold h-12 rounded-full shadow-lg shadow-[#A3E635]/20"
+                disabled={isLoading || uploadingFront || uploadingBack || uploadingSelfie}
+                className="flex-1 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold h-12 rounded-full shadow-lg shadow-[#A3E635]/20 disabled:opacity-50"
               >
-                Hoàn Tất Định Danh
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    <span>Đang Lưu Hồ Sơ...</span>
+                  </>
+                ) : (
+                  'Hoàn Tất Định Danh'
+                )}
               </Button>
             </div>
           </form>
@@ -601,7 +918,7 @@ export default function RegisterPage() {
               <Badge variant="outline" className="border-emerald-800 text-emerald-400 bg-emerald-950/60 font-semibold px-3.5 py-1 rounded-full text-xs">
                 <Sparkles className="w-3.5 h-3.5 mr-1" /> Mở tài khoản thành công
               </Badge>
-              <h2 className="text-2xl font-black text-white">Tài Khoản Số Chọn Đã Kích Hoạt</h2>
+              <h2 className="text-2xl font-black text-white">Tài Khoản Ngân Hàng Đã Kích Hoạt</h2>
               <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
                 Chào mừng <span className="font-bold text-white">{fullName || 'Khách hàng'}</span> gia nhập ngân hàng số Digital Bank!
               </p>
@@ -610,34 +927,52 @@ export default function RegisterPage() {
             <div className="bg-[#1A253D] p-5 rounded-2xl border border-slate-700/60 space-y-3 text-sm text-left max-w-md mx-auto">
               <div className="flex justify-between border-b border-slate-800 pb-2">
                 <span className="text-slate-400 text-xs">Số tài khoản thanh toán:</span>
-                <span className="font-mono font-black text-[#A3E635] text-lg">{newAccountNumber}</span>
+                <span className="font-mono font-black text-[#A3E635] text-lg">{createdAccountNumber || '9333xxxxxx'}</span>
+              </div>
+              {customerCode && (
+                <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
+                  <span className="text-slate-400">Mã khách hàng (CIF):</span>
+                  <span className="font-mono font-bold text-white">{customerCode}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
+                <span className="text-slate-400">Họ và tên chủ tài khoản:</span>
+                <span className="font-bold text-white">{fullName}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
-                <span className="text-slate-400">Email đăng ký:</span>
-                <span className="font-medium text-white">{email}</span>
+                <span className="text-slate-400">Số CCCD / CMND:</span>
+                <span className="font-mono text-white">{idNumber}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
                 <span className="text-slate-400">Địa chỉ thường trú:</span>
-                <span className="font-medium text-white">{address}</span>
+                <span className="font-medium text-white text-right max-w-[200px] truncate">{address}</span>
               </div>
               <div className="flex justify-between border-b border-slate-800 pb-2 text-xs">
-                <span className="text-slate-400">Xác thực OTP Gmail:</span>
+                <span className="text-slate-400">Xác thực OTP Email:</span>
                 <span className="text-[#A3E635] font-bold">Đã xác thực ✓</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Trạng thái eKYC:</span>
+                <span className="text-slate-400">Trạng thái hồ sơ eKYC:</span>
                 <span className="text-[#A3E635] font-bold">Hoàn tất định danh ✓</span>
               </div>
             </div>
 
-            <Link href="/login" className="block w-full max-w-md mx-auto">
-              <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-base py-4 rounded-full shadow-lg shadow-[#A3E635]/20 h-14">
-                Đăng Nhập Ứng Dụng Ngay
+            <Link href="/dashboard" className="block w-full max-w-md mx-auto">
+              <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-base py-4 rounded-full shadow-lg shadow-[#A3E635]/20 h-14 cursor-pointer">
+                Vào Bảng Điều Khiển Ngân Hàng
               </Button>
             </Link>
           </div>
         )}
       </main>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen w-screen bg-[#0D1527] flex items-center justify-center text-white"><Loader2 className="w-8 h-8 animate-spin text-[#A3E635]" /></div>}>
+      <RegisterContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Settings as SettingsIcon, 
@@ -18,40 +18,19 @@ import {
   Unlock, 
   ArrowRightLeft,
   Wifi,
-  Sparkles
+  Sparkles,
+  Plus,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { customerApi, CustomerProfile } from "@/lib/api/customerApi";
+import { accountApi, AccountResponseData } from "@/lib/api/accountApi";
 
-// Mock Accounts Data
-const ACCOUNTS_DATA = [
-  {
-    id: "acc-1",
-    accountNumber: "9333436513",
-    accountName: "Tài khoản thanh toán mặc định",
-    type: "PAYMENT",
-    balance: 125500000,
-    currency: "VND",
-    branch: "Chi nhánh Trụ sở chính",
-    status: "ACTIVE",
-    isDefault: true,
-  },
-  {
-    id: "acc-2",
-    accountNumber: "8880987654",
-    accountName: "Tài khoản tiết kiệm tích lũy",
-    type: "SAVINGS",
-    balance: 50000000,
-    currency: "VND",
-    branch: "Chi nhánh Trụ sở chính",
-    status: "ACTIVE",
-    interestRate: "5.8%/năm",
-    isDefault: false,
-  },
-];
-
-// Mock Cards Data
+// Static Cards Demo Data
 const CARDS_DATA = [
   {
     id: "card-1",
@@ -78,10 +57,39 @@ const CARDS_DATA = [
 ];
 
 export default function AccountsPage() {
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [accounts, setAccounts] = useState<AccountResponseData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(true);
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null);
   const [cardsState, setCardsState] = useState(CARDS_DATA);
   const [activeTab, setActiveTab] = useState<'ACCOUNTS' | 'CARDS'>('ACCOUNTS');
+
+  useEffect(() => {
+    // 1. Fetch profile for holder name & info
+    customerApi.getMyProfile()
+      .then((res) => {
+        if (res?.success && res.data) {
+          setProfile(res.data);
+          if (res.data.fullName) {
+            setCardsState(prev => prev.map(c => ({ ...c, holderName: res.data.fullName })));
+          }
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch real accounts list via /api/v1/accounts/my-accounts
+    accountApi.getMyAccounts()
+      .then((res) => {
+        if (res?.success && res.data) {
+          setAccounts(res.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, []);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -93,7 +101,7 @@ export default function AccountsPage() {
     setCardsState(prev => prev.map(c => c.id === cardId ? { ...c, isLocked: !c.isLocked } : c));
   };
 
-  const totalBalance = ACCOUNTS_DATA.reduce((acc, curr) => acc + curr.balance, 0);
+  const totalBalance = accounts.reduce((sum, acc) => sum + (acc.availableBalance ?? acc.balance ?? 0), 0);
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#0D1527] text-slate-100 flex font-sans selection:bg-[#A3E635] selection:text-slate-950">
@@ -102,35 +110,8 @@ export default function AccountsPage() {
 
       {/* Main Viewport Column (Fixed Header + Scrollable Body) */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        {/* Taller & Spacious Fixed Topbar (h-20) */}
-        <header className="h-20 px-8 flex items-center justify-between text-xs text-slate-300 border-b border-slate-800/80 bg-[#0D1527]/95 backdrop-blur-md shrink-0 z-30 shadow-md">
-          <div className="flex items-center gap-3 bg-[#141C2E] border border-slate-800/80 px-4 py-2 rounded-full">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-xs shadow-md">
-              CD
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-white text-sm tracking-wide">LÊ CÔNG DUY</span>
-              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
-                <ShieldCheck className="w-3 h-3" /> Tiêu chuẩn &gt;
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-8 text-sm">
-            <Link href="/settings" className="flex items-center gap-2 hover:text-white transition-colors">
-              <SettingsIcon className="w-4 h-4 text-slate-400" />
-              <span>Cài đặt</span>
-            </Link>
-            <button className="flex items-center gap-2 hover:text-white transition-colors">
-              <Globe className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-200">English</span>
-            </button>
-            <Link href="/login" className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors">
-              <Power className="w-4 h-4" />
-              <span>Đăng xuất</span>
-            </Link>
-          </div>
-        </header>
+        {/* Dynamic Connected Topbar */}
+        <CustomerTopbar />
 
         {/* Scrollable Main Body */}
         <main className="flex-1 p-8 space-y-6 overflow-y-auto">
@@ -145,12 +126,12 @@ export default function AccountsPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold text-white tracking-tight">Quản lý tài khoản & Thẻ</h1>
-              <p className="text-xs text-slate-400 mt-1">Danh sách tài khoản thanh toán, sổ tiết kiệm và quản lý thẻ ngân hàng 3D</p>
+              <p className="text-xs text-slate-400 mt-1">Danh sách tài khoản thanh toán, tiết kiệm và quản lý thẻ trực tuyến</p>
             </div>
 
             <button
               onClick={() => setShowBalance(!showBalance)}
-              className="self-start md:self-auto bg-[#141C2E] hover:bg-[#1A253D] border border-slate-700/80 px-4 py-2.5 rounded-full text-xs font-semibold text-slate-200 flex items-center gap-2 transition-all shadow-md"
+              className="self-start md:self-auto bg-[#141C2E] hover:bg-[#1A253D] border border-slate-700/80 px-4 py-2.5 rounded-full text-xs font-semibold text-slate-200 flex items-center gap-2 transition-all shadow-md cursor-pointer"
             >
               {showBalance ? (
                 <>
@@ -172,7 +153,13 @@ export default function AccountsPage() {
               <div className="space-y-1">
                 <span className="text-xs text-slate-400 font-medium">Tổng tài sản khả dụng</span>
                 <div className="font-mono font-black text-2xl text-[#A3E635]">
-                  {showBalance ? `${totalBalance.toLocaleString('vi-VN')} VND` : '•••••••• VND'}
+                  {isLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-[#A3E635]" />
+                  ) : showBalance ? (
+                    `${totalBalance.toLocaleString('vi-VN')} VND`
+                  ) : (
+                    '•••••••• VND'
+                  )}
                 </div>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-emerald-950 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -182,9 +169,9 @@ export default function AccountsPage() {
 
             <div className="bg-[#141C2E] border border-slate-800/80 rounded-3xl p-5 flex items-center justify-between shadow-xl">
               <div className="space-y-1">
-                <span className="text-xs text-slate-400 font-medium">Tổng số tài khoản</span>
+                <span className="text-xs text-slate-400 font-medium">Số tài khoản đang có</span>
                 <div className="font-extrabold text-xl text-white">
-                  2 <span className="text-xs text-slate-400 font-normal">(1 Thanh toán + 1 Tiết kiệm)</span>
+                  {accounts.length} <span className="text-xs text-slate-400 font-normal">tài khoản hoạt động</span>
                 </div>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700 flex items-center justify-center text-emerald-400">
@@ -218,7 +205,7 @@ export default function AccountsPage() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all ${
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                       isActive 
                         ? 'bg-[#A3E635] text-slate-950 shadow-lg shadow-[#A3E635]/20' 
                         : 'bg-[#141C2E] text-slate-300 hover:bg-[#1A253D] hover:text-white border border-slate-800'
@@ -242,75 +229,91 @@ export default function AccountsPage() {
           {/* TAB 1: ACCOUNTS SECTION */}
           {activeTab === 'ACCOUNTS' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {ACCOUNTS_DATA.map((acc) => (
-                  <div 
-                    key={acc.id}
-                    className="bg-[#141C2E] border border-slate-800/80 hover:border-slate-700 rounded-3xl p-6 shadow-xl space-y-5 transition-all"
-                  >
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                      <div>
-                        <span className="text-xs text-slate-400 font-medium">{acc.accountName}</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="font-mono font-black text-white text-lg">{acc.accountNumber}</span>
-                          <button
-                            onClick={() => copyToClipboard(acc.accountNumber)}
-                            className="text-slate-400 hover:text-white p-1 transition-colors"
-                            title="Sao chép số tài khoản"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                          {copiedAccount === acc.accountNumber && (
-                            <span className="text-[10px] text-emerald-400 font-semibold animate-in fade-in">Đã chép!</span>
-                          )}
+              {isLoading ? (
+                <div className="bg-[#141C2E] border border-slate-800 rounded-3xl p-12 flex items-center justify-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-[#A3E635]" />
+                  <span className="text-sm text-slate-300">Đang tải danh sách tài khoản...</span>
+                </div>
+              ) : accounts.length === 0 ? (
+                <div className="bg-[#141C2E] border border-slate-800 rounded-3xl p-12 text-center space-y-3">
+                  <AlertCircle className="w-10 h-10 text-amber-400 mx-auto" />
+                  <p className="text-sm text-slate-300">Chưa có tài khoản thanh toán nào.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {accounts.map((acc, idx) => (
+                    <div 
+                      key={acc.id}
+                      className="bg-[#141C2E] border border-slate-800/80 hover:border-slate-700 rounded-3xl p-6 shadow-xl space-y-5 transition-all"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                        <div>
+                          <span className="text-xs text-slate-400 font-medium">
+                            {acc.accountType === 'CHECKING' ? 'Tài khoản thanh toán' : 'Tài khoản tiết kiệm'} ({acc.currency})
+                          </span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="font-mono font-black text-white text-lg">{acc.accountNumber}</span>
+                            <button
+                              onClick={() => copyToClipboard(acc.accountNumber)}
+                              className="text-slate-400 hover:text-white p-1 transition-colors cursor-pointer"
+                              title="Sao chép số tài khoản"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            {copiedAccount === acc.accountNumber && (
+                              <span className="text-[10px] text-emerald-400 font-semibold animate-in fade-in">Đã chép!</span>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {acc.isDefault ? (
-                        <Badge variant="outline" className="border-emerald-800 text-emerald-400 bg-emerald-950/60 text-[10px] px-3 py-1 rounded-full">
-                          Mặc định
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="border-cyan-800 text-cyan-400 bg-cyan-950/60 text-[10px] px-3 py-1 rounded-full">
-                          {acc.interestRate}
-                        </Badge>
-                      )}
-                    </div>
-
-                    {/* Balance Container */}
-                    <div className="bg-gradient-to-r from-[#1A253D] via-[#162238] to-[#1A253D] border border-slate-700/80 rounded-2xl p-5 flex items-center justify-between">
-                      <div>
-                        <span className="text-xs text-slate-400 font-medium">Số dư khả dụng:</span>
-                        <div className="font-mono font-black text-2xl text-[#A3E635] mt-1">
-                          {showBalance ? `${acc.balance.toLocaleString('vi-VN')} ${acc.currency}` : '•••••••• VND'}
-                        </div>
-                      </div>
-                      <div className="w-10 h-10 rounded-xl bg-[#0D1527] flex items-center justify-center text-emerald-400 border border-slate-700">
-                        <Wallet className="w-5 h-5" />
-                      </div>
-                    </div>
-
-                    {/* Account Quick Action Buttons */}
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <Link href="/transfers" className="w-full">
-                        <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md">
-                          <ArrowRightLeft className="w-3.5 h-3.5" />
-                          <span>Chuyển tiền</span>
-                        </Button>
-                      </Link>
-                      <Link href="/transactions" className="w-full">
-                        <Button 
-                          variant="outline"
-                          className="w-full border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5"
+                        <Badge 
+                          variant="outline" 
+                          className={acc.status === 'ACTIVE' 
+                            ? "border-emerald-800 text-emerald-400 bg-emerald-950/60 text-[10px] px-3 py-1 rounded-full"
+                            : "border-red-800 text-red-400 bg-red-950/60 text-[10px] px-3 py-1 rounded-full"
+                          }
                         >
-                          <History className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Tra cứu biến động</span>
-                        </Button>
-                      </Link>
+                          {acc.status}
+                        </Badge>
+                      </div>
+
+                      {/* Balance Container */}
+                      <div className="bg-gradient-to-r from-[#1A253D] via-[#162238] to-[#1A253D] border border-slate-700/80 rounded-2xl p-5 flex items-center justify-between">
+                        <div>
+                          <span className="text-xs text-slate-400 font-medium">Số dư khả dụng:</span>
+                          <div className="font-mono font-black text-2xl text-[#A3E635] mt-1">
+                            {showBalance 
+                              ? `${(acc.availableBalance ?? acc.balance ?? 0).toLocaleString('vi-VN')} ${acc.currency}` 
+                              : '•••••••• VND'}
+                          </div>
+                        </div>
+                        <div className="w-10 h-10 rounded-xl bg-[#0D1527] flex items-center justify-center text-emerald-400 border border-slate-700">
+                          <Wallet className="w-5 h-5" />
+                        </div>
+                      </div>
+
+                      {/* Account Quick Action Buttons */}
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <Link href="/transfers" className="w-full">
+                          <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 shadow-md cursor-pointer">
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                            <span>Chuyển tiền</span>
+                          </Button>
+                        </Link>
+                        <Link href="/transactions" className="w-full">
+                          <Button 
+                            variant="outline"
+                            className="w-full border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold text-xs py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <History className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Tra cứu biến động</span>
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -355,7 +358,7 @@ export default function AccountsPage() {
 
                       <button
                         onClick={() => toggleLockCard(card.id)}
-                        className="text-xs font-bold text-slate-200 hover:text-white bg-[#1A253D] hover:bg-[#253554] px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5"
+                        className="text-xs font-bold text-slate-200 hover:text-white bg-[#1A253D] hover:bg-[#253554] px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
                       >
                         {card.isLocked ? (
                           <>

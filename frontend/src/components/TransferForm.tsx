@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTransfer } from '@/hooks/useTransfer';
 import { OtpModal } from './OtpModal';
 import { TransferReceipt } from '@/lib/types';
+import { accountApi, AccountResponseData } from '@/lib/api/accountApi';
 
 // Supported Banks List with Rich Icons
 const BANKS_LIST = [
@@ -95,11 +96,8 @@ export function TransferForm() {
     description?: string;
   } | null>(null);
 
-  // Available source accounts mock data
-  const accounts = [
-    { number: '9333436513', name: 'Tài khoản thanh toán mặc định', balance: 125500000, currency: 'VND' },
-    { number: '8880987654', name: 'Tài khoản tiết kiệm tích lũy', balance: 50000000, currency: 'VND' },
-  ];
+  // Available source accounts state
+  const [userAccounts, setUserAccounts] = useState<AccountResponseData[]>([]);
 
   const {
     register,
@@ -115,9 +113,31 @@ export function TransferForm() {
       bankCode: 'DBC',
       targetAccountNumber: '',
       formattedAmount: '500.000',
-      description: 'LE CONG DUY chuyen tien',
+      description: 'Chuyen tien',
     },
   });
+
+  useEffect(() => {
+    accountApi.getMyAccounts()
+      .then((res) => {
+        if (res?.success && res.data && res.data.length > 0) {
+          setUserAccounts(res.data);
+          setValue('sourceAccountNumber', res.data[0].accountNumber);
+        }
+      })
+      .catch(() => {});
+  }, [setValue]);
+
+  const accounts = userAccounts.length > 0 
+    ? userAccounts.map(a => ({
+        number: a.accountNumber,
+        name: a.accountType === 'CHECKING' ? 'Tài khoản thanh toán mặc định' : 'Tài khoản tiết kiệm',
+        balance: a.availableBalance ?? a.balance ?? 0,
+        currency: a.currency
+      }))
+    : [
+        { number: '9333436513', name: 'Tài khoản thanh toán mặc định', balance: 0, currency: 'VND' },
+      ];
 
   const selectedSourceAccount = watch('sourceAccountNumber');
   const selectedBankCode = watch('bankCode');
