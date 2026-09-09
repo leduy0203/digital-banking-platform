@@ -8,7 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, Long> {
+public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, UUID> {
 
     Optional<KycDocumentEntity> findTopByCustomerIdOrderBySubmittedAtDesc(UUID customerId);
 }

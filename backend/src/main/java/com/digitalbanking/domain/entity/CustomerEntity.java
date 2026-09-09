@@ -1,6 +1,5 @@
 package com.digitalbanking.domain.entity;
 
-import com.digitalbanking.domain.common.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 

@@ -1,7 +1,6 @@
 package com.digitalbanking.domain.entity;
 
 
-import com.digitalbanking.domain.common.BaseEntity;
 import com.digitalbanking.domain.enums.TransactionStatus;
 import com.digitalbanking.domain.enums.TransactionType;
 import jakarta.persistence.*;

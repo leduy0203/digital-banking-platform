@@ -1,6 +1,5 @@
 package com.digitalbanking.domain.entity;
 
-import com.digitalbanking.domain.common.BaseEntity;
 import com.digitalbanking.domain.enums.LedgerEntryType;
 import jakarta.persistence.*;
 import lombok.*;
