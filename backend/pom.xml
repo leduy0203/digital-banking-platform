@@ -94,6 +94,16 @@
 			<scope>runtime</scope>
 		</dependency>
 
+
+		<!--
+			Spring Boot JDBC Starter
+			https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-jdbc
+		-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
+		</dependency>
+
 		<!--
             Lombok
             https://mvnrepository.com/artifact/org.projectlombok/lombok

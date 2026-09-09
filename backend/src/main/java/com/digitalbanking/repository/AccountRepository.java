@@ -1,6 +1,5 @@
 package com.digitalbanking.repository;
 
-import com.digitalbanking.domain.dto.response.AccountResponse;
 import com.digitalbanking.domain.entity.AccountEntity;
 import com.digitalbanking.domain.enums.AccountStatus;
 import com.digitalbanking.domain.enums.AccountType;
