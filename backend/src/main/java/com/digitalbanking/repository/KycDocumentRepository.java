@@ -1,14 +1,20 @@
 package com.digitalbanking.repository;
 
 import com.digitalbanking.domain.entity.KycDocumentEntity;
+import com.digitalbanking.domain.enums.KycStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, UUID> {
+public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, UUID> , JpaSpecificationExecutor<KycDocumentEntity> {
 
     Optional<KycDocumentEntity> findTopByCustomerIdOrderBySubmittedAtDesc(UUID customerId);
+
+    Page<KycDocumentEntity> findAllByStatus(KycStatus status, Pageable pageable);
 }

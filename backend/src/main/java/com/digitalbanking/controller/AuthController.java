@@ -6,6 +6,7 @@ import com.digitalbanking.domain.dto.response.AuthResponse;
 import com.digitalbanking.domain.dto.response.RegisterResponse;
 import com.digitalbanking.service.AuthService;
 import com.digitalbanking.service.OtpService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,12 +32,14 @@ public class AuthController {
         return ApiResponse.ok("User registered successfully", response);
     }
 
-
     @PostMapping("/login")
-    public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+    public ApiResponse<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
+    ) {
         log.info("Login attempt for email: {}", request.getUsername());
 
-        AuthResponse response = authService.login(request);
+        AuthResponse response = authService.login(request, httpRequest);
         return ApiResponse.ok("Login successfully", response);
     }
 

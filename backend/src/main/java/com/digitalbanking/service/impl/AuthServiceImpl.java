@@ -10,13 +10,17 @@ import com.digitalbanking.domain.enums.UserStatus;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
 import com.digitalbanking.repository.*;
+import com.digitalbanking.security.Bucket4jRateLimiterService;
 import com.digitalbanking.security.JwtTokenProvider;
 import com.digitalbanking.service.AuthService;
 import com.digitalbanking.service.OtpService;
+import com.digitalbanking.utils.HttpRequestUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -44,6 +48,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OtpService otpService;
+    private final Bucket4jRateLimiterService rateLimiterService;
 
 
     @Value("${app.security.jwt.refresh-token-expiration-ms:604800000}")
@@ -104,47 +109,72 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
-    public AuthResponse login(LoginRequest request) {
-        log.info("Processing login request for identifier: {}", request.getUsername());
+    public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getUsername(),
-                        request.getPassword()
-                )
-        );
+        String username = normalizeUsername(request.getUsername());
+        String clientIp = HttpRequestUtils.getClientIp(httpRequest);
 
-        UserEntity user = (UserEntity) authentication.getPrincipal();
+        log.info("Login attempt for username={} from IP={}", username, clientIp);
 
-        Set<String> roleCodes = user.getRoles().stream()
-                .map(role -> role.getRoleCode().toString())
-                .collect(Collectors.toSet());
+        checkRateLimit(clientIp);
+        checkAccountLock(username);
 
-        String fullName = null;
-        boolean isProfileCompleted = false;
+        UserEntity user = authenticate(request, username, clientIp);
 
-        if (roleCodes.contains(UserRole.ROLE_CUSTOMER.name())) {
-            // if user is customer
-            Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
+        rateLimiterService.resetFailedAttempts(username);
 
-            if (customerOpt.isPresent()) {
-                fullName = customerOpt.get().getFullName();
-                isProfileCompleted = true;
-            }
-        } else if (roleCodes.contains(UserRole.ROLE_TELLER.name()) ||
-                roleCodes.contains(UserRole.ROLE_ADMIN.name())) {
+        log.info("User ID {} logged in successfully with email: {}", user.getId(), user.getEmail());
 
-            // if user is employee or admin
-            Optional<EmployeeEntity> employeeOpt = employeeRepository.findByUserId(user.getId());
+        return generateTokensAndBuildResponse(user, null);
+    }
 
-            fullName = employeeOpt.map(EmployeeEntity::getFullName).orElse("System Administrator");
-            isProfileCompleted = true;
+    private String normalizeUsername(String username) {
+        return username != null ? username.trim().toLowerCase() : "";
+    }
+
+    private void checkRateLimit(String clientIp) {
+        if (rateLimiterService.isRateLimited(clientIp)) {
+            log.warn("Rate limit exceeded for IP: {}", clientIp);
+            throw new BusinessException(
+                    ErrorCode.TOO_MANY_REQUESTS,
+                    "You have made too many login requests. Please try again in 1 minute."
+            );
         }
+    }
 
+    private void checkAccountLock(String username) {
+        if (rateLimiterService.isAccountLocked(username)) {
+            log.warn("Account {} is currently locked", username);
+            throw new BusinessException(
+                    ErrorCode.TOO_MANY_REQUESTS,
+                    "Your account is temporarily locked due to multiple failed login attempts. Please try again in 15 minutes."
+            );
+        }
+    }
 
-        log.info("User ID {} ({}) logged in successfully with roles {}", user.getId(), fullName, roleCodes);
+    private UserEntity authenticate(LoginRequest request, String username, String clientIp) {
+        try {
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, request.getPassword())
+            );
+            return (UserEntity) authentication.getPrincipal();
+        } catch (BadCredentialsException ex) {
+            handleFailedLogin(username, clientIp);
+            throw new BusinessException(ErrorCode.INVALID_CREDENTIALS);
+        }
+    }
 
-        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, null);
+    private void handleFailedLogin(String username, String clientIp) {
+        int failedAttempts = rateLimiterService.recordFailedAttempt(username);
+        log.warn("Failed login attempt #{} for username={} from IP={}", failedAttempts, username, clientIp);
+
+        if (rateLimiterService.isAccountLocked(username)) {
+            log.warn("Account {} locked after {} failed attempts", username, failedAttempts);
+            throw new BusinessException(
+                    ErrorCode.TOO_MANY_REQUESTS,
+                    "You have entered the wrong password 5 times. Your account is temporarily locked for 15 minutes."
+            );
+        }
     }
 
 
@@ -182,13 +212,6 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException(ErrorCode.ACCOUNT_INACTIVE);
         }
 
-        Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
-
-        String fullName = customerOpt.map(CustomerEntity::getFullName).orElse(null);
-
-        boolean isProfileCompleted = customerOpt.isPresent();
-
-        //get expires of old token
         Instant originalExpiresAt = tokenEntity.getExpiresAt();
 
         // set revoked and last used at
@@ -198,7 +221,7 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.save(tokenEntity);
 
-        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, originalExpiresAt);
+        return generateTokensAndBuildResponse(user, originalExpiresAt);
     }
 
 
@@ -242,24 +265,38 @@ public class AuthServiceImpl implements AuthService {
         boolean isProfileCompleted = customerOpt.isPresent();
         log.info("User {} verified OTP successfully, generating tokens", user.getEmail());
 
-        return generateTokensAndBuildResponse(user, fullName, isProfileCompleted, null);
+        return generateTokensAndBuildResponse(user, null);
     }
 
-
-    private AuthResponse generateTokensAndBuildResponse(
-            UserEntity user,
-            String fullName,
-            boolean isProfileCompleted ,
-            Instant originalExpiresAt
-    ) {
+    private AuthResponse generateTokensAndBuildResponse(UserEntity user, Instant originalExpiresAt) {
         log.info("Generating tokens for user with email: {}", user.getEmail());
+
+        Set<String> roles = new HashSet<>();
+        if (user.getRoles() != null) {
+            user.getRoles().forEach(role -> roles.add(role.getRoleCode().toString()));
+        }
+
+        String fullName = null;
+        boolean isProfileCompleted = false;
+
+        if (roles.contains(UserRole.ROLE_CUSTOMER.name())) {
+            Optional<CustomerEntity> customerOpt = customerRepository.findByUserId(user.getId());
+            if (customerOpt.isPresent()) {
+                fullName = customerOpt.get().getFullName();
+                isProfileCompleted = true;
+            }
+        } else if (roles.contains(UserRole.ROLE_TELLER.name()) || roles.contains(UserRole.ROLE_ADMIN.name())) {
+            Optional<EmployeeEntity> employeeOpt = employeeRepository.findByUserId(user.getId());
+            fullName = employeeOpt.map(EmployeeEntity::getFullName).orElse("System Administrator");
+            isProfileCompleted = true;
+        }
 
         Instant expiry = (originalExpiresAt != null)
                 ? originalExpiresAt
                 : Instant.now().plusMillis(refreshTokenExpirationMs);
 
         String accessToken = jwtTokenProvider.generateAccessToken(user);
-        String refreshTokenStr = jwtTokenProvider.generateRefreshTokenWithExpiry(user , expiry);
+        String refreshTokenStr = jwtTokenProvider.generateRefreshTokenWithExpiry(user, expiry);
 
         String hashToken = hashToken(refreshTokenStr);
 
@@ -271,12 +308,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         refreshTokenRepository.save(refreshTokenEntity);
-        log.info("Save successful tokens for user with email: {}", user.getEmail());
-
-        Set<String> roles = new HashSet<>();
-        if (user.getRoles() != null) {
-            user.getRoles().forEach(role -> roles.add(role.getRoleCode().toString()));
-        }
+        log.info("Saved tokens successfully for user with email: {}", user.getEmail());
 
         AuthResponse.UserSummary userSummary = AuthResponse.UserSummary.builder()
                 .id(user.getId())
@@ -286,7 +318,6 @@ public class AuthServiceImpl implements AuthService {
                 .isProfileCompleted(isProfileCompleted)
                 .roles(roles)
                 .build();
-
 
         return AuthResponse.builder()
                 .accessToken(accessToken)

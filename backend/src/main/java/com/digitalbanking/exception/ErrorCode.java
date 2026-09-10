@@ -38,6 +38,9 @@ public enum ErrorCode {
     KYC_NOT_VERIFIED("CUST_002", "Customer eKYC verification is required", HttpStatus.FORBIDDEN),
     NATIONAL_ID_ALREADY_EXISTS("USER_008", "National ID (CCCD/CMND) is already registered", HttpStatus.BAD_REQUEST),
 
+    // EMPLOYEE
+    EMPLOYEE_NOT_FOUND("EMP_001", "Employee profile not found", HttpStatus.NOT_FOUND),
+
     // 4. ACCOUNT & LEDGER
 
     ACCOUNT_NOT_FOUND("ACC_001", "Bank account not found", HttpStatus.NOT_FOUND),
@@ -72,7 +75,14 @@ public enum ErrorCode {
     TOO_MANY_REQUESTS("SYS_005", "Too many requests. Please try again later.", HttpStatus.TOO_MANY_REQUESTS),
 
     // PROFILE
-    CUSTOMER_PROFILE_ALREADY_EXISTS("CUST_003", "Customer profile already exists for this user", HttpStatus.CONFLICT);
+    CUSTOMER_PROFILE_ALREADY_EXISTS("CUST_003", "Customer profile already exists for this user", HttpStatus.CONFLICT),
+
+
+
+    // KYC
+    KYC_DOCUMENT_NOT_FOUND("KYC_001", "KYC document not found", HttpStatus.NOT_FOUND),
+    KYC_ALREADY_PROCESSED("KYC_002", "KYC document has already been processed", HttpStatus.BAD_REQUEST),
+    KYC_DOCUMENT_NOT_PENDING("KYC_003", "KYC document is not in PENDING status", HttpStatus.BAD_REQUEST);
 
     private final String code;
     private final String message;

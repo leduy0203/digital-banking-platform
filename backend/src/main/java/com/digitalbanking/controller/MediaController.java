@@ -7,6 +7,7 @@ import com.digitalbanking.security.Bucket4jRateLimiterService;
 import com.digitalbanking.security.SecurityUtils;
 import com.digitalbanking.service.CloudinaryService;
 import com.digitalbanking.utils.FileValidator;
+import com.digitalbanking.utils.HttpRequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,8 +40,8 @@ public class MediaController {
     ) {
         log.info("Uploading KYC image");
 
-        String clientIp = getClientIp(request);
-        if (!rateLimiterService.tryConsume(clientIp)) {
+        String clientIp = HttpRequestUtils.getClientIp(request);
+        if (rateLimiterService.isRateLimited(clientIp)) {
             throw new BusinessException(ErrorCode.TOO_MANY_REQUESTS);
         }
 
@@ -50,14 +51,5 @@ public class MediaController {
         Map<String, String> uploadResult = cloudinaryService.uploadTempKycImage(file, currentUserId, docType);
 
         return ApiResponse.ok("Upload successfully", uploadResult);
-    }
-
-
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null || xfHeader.isEmpty()) {
-            return request.getRemoteAddr();
-        }
-        return xfHeader.split(",")[0].trim();
     }
 }
