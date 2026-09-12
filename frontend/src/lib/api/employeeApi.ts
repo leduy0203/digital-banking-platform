@@ -1,6 +1,8 @@
 import { apiClient } from "../axios";
 import { 
   KycApplication, 
+  KycDocumentResponse,
+  KycFilterPayload,
   Customer360, 
   AccountItem, 
   FreezeAccountPayload, 
@@ -8,6 +10,7 @@ import {
   EmployeeTransaction, 
   EmployeeDashboardStats 
 } from "../types/employee";
+import { PageResponse } from "../types/admin";
 import { 
   mockDashboardStats, 
   mockKycList, 
@@ -23,7 +26,37 @@ let localTransactionsList = [...mockTransactionsList];
 
 export const employeeApi = {
   /**
-   * Lấy chỉ số tổng quan cho Teller Dashboard
+   * Lấy hồ sơ thông tin của Nhân viên đang đăng nhập (GET /api/v1/employee/profile/me)
+   */
+  async getMyProfile(): Promise<{
+    id: string;
+    employeeCode: string;
+    fullName: string;
+    department: string;
+    hireDate: string;
+    email: string;
+    phoneNumber: string;
+    status?: string;
+  }> {
+    try {
+      const res = await apiClient.get<{ data: any }>("/employee/profile/me");
+      return res.data.data;
+    } catch {
+      return {
+        id: "emp-me",
+        employeeCode: "EMP102948",
+        fullName: "Nguyễn Văn An",
+        department: "KYC_VERIFICATION",
+        hireDate: "2024-01-15",
+        email: "an.nguyen@bank.com",
+        phoneNumber: "0912345678",
+        status: "ACTIVE",
+      };
+    }
+  },
+
+  /**
+   * Lấy danh sách thống kê Dashboard
    */
   async getDashboardStats(): Promise<EmployeeDashboardStats> {
     try {
@@ -35,40 +68,140 @@ export const employeeApi = {
   },
 
   /**
-   * Lấy danh sách hồ sơ eKYC cần thẩm định
+   * Lấy danh sách hồ sơ eKYC dạng mảng (Helper cho Dashboard)
    */
   async getKycApplications(): Promise<KycApplication[]> {
     try {
-      const res = await apiClient.get<{ data: KycApplication[] }>("/employee/kyc");
-      return res.data.data;
+      const res = await this.getPendingKycs();
+      return (res.items || []).map(doc => ({
+        id: doc.id,
+        cif: doc.customerCode || "",
+        fullName: doc.fullName,
+        dob: doc.dateOfBirth || "",
+        idNumber: doc.nationalId,
+        issueDate: "",
+        address: doc.address || "",
+        phone: doc.phoneNumber,
+        email: doc.email,
+        aiScore: 98,
+        submittedAt: doc.submittedAt,
+        status: doc.status as any,
+        frontImg: doc.frontIdCardUrl,
+        backImg: doc.backIdCardUrl,
+        selfieImg: doc.selfiePhotoUrl,
+        rejectReason: doc.rejectionReason,
+      }));
     } catch {
       return localKycList;
     }
   },
 
   /**
-   * Phê duyệt hồ sơ eKYC
+   * Lấy danh sách hồ sơ eKYC cần thẩm định (GET /api/v1/employee/kyc/pending)
    */
-  async approveKyc(id: string): Promise<{ success: boolean; message: string }> {
+  async getPendingKycs(filter?: KycFilterPayload): Promise<PageResponse<KycDocumentResponse>> {
     try {
-      const res = await apiClient.post<{ success: boolean; message: string }>(`/employee/kyc/${id}/approve`);
-      return res.data;
+      const res = await apiClient.get<{ data: PageResponse<KycDocumentResponse> }>("/employee/kyc/pending", {
+        params: filter,
+      });
+      return res.data.data;
     } catch {
-      localKycList = localKycList.map(item => item.id === id ? { ...item, status: "APPROVED" } : item);
-      return { success: true, message: `Đã phê duyệt thành công hồ sơ eKYC ${id}` };
+      // Mock fallback
+      let items: KycDocumentResponse[] = localKycList.map(k => ({
+        id: k.id,
+        status: (k.status === "APPROVED" ? "VERIFIED" : k.status) as any,
+        frontIdCardUrl: k.frontImg || "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80",
+        backIdCardUrl: k.backImg || "https://images.unsplash.com/photo-1544717305-2782549b5136?w=600&auto=format&fit=crop&q=80",
+        selfiePhotoUrl: k.selfieImg || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80",
+        rejectionReason: k.rejectReason,
+        submittedAt: k.submittedAt,
+        customerId: k.id,
+        customerCode: k.cif,
+        fullName: k.fullName,
+        nationalId: k.idNumber,
+        dateOfBirth: k.dob,
+        address: k.address,
+        email: k.email,
+        phoneNumber: k.phone,
+      }));
+
+      if (filter?.status) {
+        items = items.filter(i => i.status === filter.status);
+      }
+      if (filter?.keyword) {
+        const q = filter.keyword.toLowerCase();
+        items = items.filter(i => 
+          i.fullName.toLowerCase().includes(q) ||
+          i.nationalId.includes(q) ||
+          i.email.toLowerCase().includes(q) ||
+          i.phoneNumber.includes(q) ||
+          (i.customerCode && i.customerCode.toLowerCase().includes(q))
+        );
+      }
+
+      return {
+        items,
+        page: 1,
+        size: 10,
+        totalElements: items.length,
+        totalPages: 1,
+        isLast: true,
+      };
     }
   },
 
   /**
-   * Từ chối hồ sơ eKYC
+   * Lấy chi tiết 1 hồ sơ eKYC (GET /api/v1/employee/kyc/{id})
    */
-  async rejectKyc(id: string, reason: string): Promise<{ success: boolean; message: string }> {
+  async getKycDetail(id: string): Promise<KycDocumentResponse> {
     try {
-      const res = await apiClient.post<{ success: boolean; message: string }>(`/employee/kyc/${id}/reject`, { reason });
-      return res.data;
+      const res = await apiClient.get<{ data: KycDocumentResponse }>(`/employee/kyc/${id}`);
+      return res.data.data;
     } catch {
-      localKycList = localKycList.map(item => item.id === id ? { ...item, status: "REJECTED", rejectReason: reason } : item);
-      return { success: true, message: `Đã từ chối hồ sơ eKYC ${id}` };
+      const found = localKycList.find(k => k.id === id) || localKycList[0];
+      return {
+        id: found.id,
+        status: (found.status === "APPROVED" ? "VERIFIED" : found.status) as any,
+        frontIdCardUrl: found.frontImg,
+        backIdCardUrl: found.backImg,
+        selfiePhotoUrl: found.selfieImg,
+        rejectionReason: found.rejectReason,
+        submittedAt: found.submittedAt,
+        customerId: found.id,
+        customerCode: found.cif,
+        fullName: found.fullName,
+        nationalId: found.idNumber,
+        dateOfBirth: found.dob,
+        address: found.address,
+        email: found.email,
+        phoneNumber: found.phone,
+      };
+    }
+  },
+
+  /**
+   * Phê duyệt hồ sơ eKYC (PUT /api/v1/employee/kyc/{id}/approve)
+   */
+  async approveKyc(id: string): Promise<{ success: boolean; data?: KycDocumentResponse; message: string }> {
+    try {
+      const res = await apiClient.put<{ success: boolean; data: KycDocumentResponse; message: string }>(`/employee/kyc/${id}/approve`);
+      return res.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Phê duyệt eKYC thất bại";
+      throw new Error(errorMsg);
+    }
+  },
+
+  /**
+   * Từ chối hồ sơ eKYC (PUT /api/v1/employee/kyc/{id}/reject)
+   */
+  async rejectKyc(id: string, reason: string): Promise<{ success: boolean; data?: KycDocumentResponse; message: string }> {
+    try {
+      const res = await apiClient.put<{ success: boolean; data: KycDocumentResponse; message: string }>(`/employee/kyc/${id}/reject`, { reason });
+      return res.data;
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Từ chối eKYC thất bại";
+      throw new Error(errorMsg);
     }
   },
 

@@ -46,7 +46,7 @@ public class AuthServiceImpl implements AuthService {
     private final EmployeeRepository employeeRepository;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
+    private final TokenRepository refreshTokenRepository;
     private final OtpService otpService;
     private final Bucket4jRateLimiterService rateLimiterService;
 

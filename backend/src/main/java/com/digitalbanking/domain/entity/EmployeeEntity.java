@@ -1,5 +1,6 @@
 package com.digitalbanking.domain.entity;
 
+import com.digitalbanking.domain.enums.DepartmentType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -20,8 +21,9 @@ public class EmployeeEntity extends BaseEntity {
     @Column(name = "full_name", nullable = false, length = 150)
     private String fullName;
 
-    @Column(name = "department", length = 100)
-    private String department;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "department", length = 50)
+    private DepartmentType department;
 
     @Column(name = "hire_date")
     private LocalDate hireDate;

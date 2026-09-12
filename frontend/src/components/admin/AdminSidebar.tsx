@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { 
   Activity, 
   Users, 
+  UserCheck,
   ShieldCheck, 
   FileText, 
   LogOut, 
@@ -22,14 +23,19 @@ const adminNavItems = [
     icon: Activity,
   },
   {
-    name: "Quản lý User & Nhân viên",
-    href: "/admin/users",
+    name: "Quản lý Khách hàng",
+    href: "/admin/customers",
     icon: Users,
+  },
+  {
+    name: "Quản lý Nhân viên",
+    href: "/admin/employees",
+    icon: ShieldCheck,
   },
   {
     name: "Phân quyền RBAC",
     href: "/admin/roles",
-    icon: ShieldCheck,
+    icon: UserCheck,
   },
   {
     name: "Vận hành Hệ thống",

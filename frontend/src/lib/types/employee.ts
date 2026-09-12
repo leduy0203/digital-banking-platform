@@ -1,3 +1,37 @@
+export type KycStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+
+export interface KycDocumentResponse {
+  id: string;
+  status: KycStatus;
+  frontIdCardUrl: string;
+  backIdCardUrl: string;
+  selfiePhotoUrl: string;
+  rejectionReason?: string;
+  submittedAt: string;
+  verifiedAt?: string;
+  verifiedByEmployeeCode?: string;
+  verifiedByEmployeeName?: string;
+  customerId?: string;
+  customerCode?: string;
+  fullName: string;
+  nationalId: string;
+  dateOfBirth?: string;
+  address?: string;
+  email: string;
+  phoneNumber: string;
+}
+
+export interface KycFilterPayload {
+  keyword?: string;
+  status?: KycStatus;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+}
+
 export interface KycApplication {
   id: string;
   cif: string;
@@ -10,7 +44,7 @@ export interface KycApplication {
   email: string;
   aiScore: number;
   submittedAt: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "VERIFIED" | "APPROVED" | "REJECTED";
   frontImg: string;
   backImg: string;
   selfieImg: string;

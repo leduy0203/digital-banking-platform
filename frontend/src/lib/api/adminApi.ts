@@ -1,7 +1,9 @@
 import { apiClient } from "../axios";
 import { 
   RbacRole, 
-  EmployeeUser, 
+  EmployeeProfileResponse, 
+  EmployeeFilterPayload,
+  PageResponse,
   CreateEmployeePayload, 
   SchedulerJob, 
   AuditLogItem, 
@@ -34,65 +36,76 @@ export const adminApi = {
   },
 
   /**
-   * Lấy danh sách Nhân viên & User hệ thống
+   * Lấy danh sách Nhân viên & User hệ thống (Hỗ trợ phân trang + filter đa trường)
    */
-  async getEmployees(query?: string): Promise<EmployeeUser[]> {
+  async getEmployees(filter?: EmployeeFilterPayload): Promise<PageResponse<EmployeeProfileResponse>> {
     try {
-      const res = await apiClient.get<{ data: EmployeeUser[] }>("/admin/employees", { params: { query } });
+      const res = await apiClient.get<{ data: PageResponse<EmployeeProfileResponse> }>("/admin/employees", {
+        params: filter,
+      });
       return res.data.data;
     } catch {
-      if (!query) return localEmployees;
-      const q = query.toLowerCase();
-      return localEmployees.filter(e => 
-        e.fullName.toLowerCase().includes(q) || 
-        e.employeeCode.toLowerCase().includes(q) || 
-        e.email.toLowerCase().includes(q)
-      );
+      // Mock fallback if offline
+      const mockMapped: EmployeeProfileResponse[] = mockEmployees.map(e => ({
+        id: e.id,
+        employeeCode: e.employeeCode,
+        fullName: e.fullName,
+        department: 'CUSTOMER_SERVICE',
+        hireDate: '2024-01-15',
+        email: e.email,
+        phoneNumber: e.phone,
+        status: e.status === 'LOCKED' ? 'BLOCKED' : 'ACTIVE',
+        createdAt: e.createdAt,
+        updatedAt: e.createdAt,
+      }));
+      return {
+        items: mockMapped,
+        page: 1,
+        size: 10,
+        totalElements: mockMapped.length,
+        totalPages: 1,
+        isLast: true,
+      };
     }
   },
 
   /**
    * Tạo nhân viên mới
    */
-  async createEmployee(payload: CreateEmployeePayload): Promise<{ success: boolean; employee: EmployeeUser; message: string }> {
+  async createEmployee(payload: CreateEmployeePayload): Promise<{ success: boolean; employee: EmployeeProfileResponse; message: string }> {
     try {
-      const res = await apiClient.post<{ data: EmployeeUser }>("/admin/employees", payload);
-      return { success: true, employee: res.data.data, message: "Tạo nhân viên thành công" };
-    } catch {
-      const newEmp: EmployeeUser = {
-        id: "emp-" + Date.now(),
-        employeeCode: payload.employeeCode,
-        fullName: payload.fullName,
-        email: payload.email,
-        phone: payload.phone,
-        branch: payload.branch,
-        role: payload.role,
-        status: "ACTIVE",
-        createdAt: new Date().toLocaleDateString("vi-VN"),
-        lastLogin: "Chưa đăng nhập",
-      };
-      localEmployees = [newEmp, ...localEmployees];
-      return { success: true, employee: newEmp, message: `Tạo nhân viên ${payload.fullName} thành công!` };
+      const res = await apiClient.post<{ data: EmployeeProfileResponse }>("/admin/employees", payload);
+      return { success: true, employee: res.data.data, message: "Tạo nhân viên thành công!" };
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Tạo nhân viên thất bại";
+      throw new Error(errorMsg);
     }
   },
 
   /**
-   * Khóa / Mở khóa nhân viên
+   * Khóa / Mở khóa tài khoản nhân viên (PATCH /api/v1/admin/employees/{id}/status)
    */
-  async toggleLockEmployee(id: string): Promise<{ success: boolean; message: string }> {
+  async updateEmployeeStatus(id: string, status: 'ACTIVE' | 'BLOCKED'): Promise<{ success: boolean; data?: EmployeeProfileResponse; message: string }> {
     try {
-      const res = await apiClient.post<{ success: boolean; message: string }>(`/admin/employees/${id}/toggle-lock`);
+      const res = await apiClient.patch<{ success: boolean; data: EmployeeProfileResponse; message: string }>(
+        `/admin/employees/${id}/status`,
+        null,
+        { params: { status } }
+      );
       return res.data;
-    } catch {
-      localEmployees = localEmployees.map(e => {
-        if (e.id === id) {
-          const nextStatus = e.status === "ACTIVE" ? "LOCKED" : "ACTIVE";
-          return { ...e, status: nextStatus };
-        }
-        return e;
-      });
-      return { success: true, message: "Đã cập nhật trạng thái khóa tài khoản nhân viên" };
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.response?.data?.detail || err.message || "Cập nhật trạng thái nhân viên thất bại";
+      throw new Error(errorMsg);
     }
+  },
+
+  /**
+   * Khóa / Mở khóa nhân viên (Legacy helper)
+   */
+  async toggleLockEmployee(id: string, currentStatus: 'ACTIVE' | 'BLOCKED' | string = 'ACTIVE'): Promise<{ success: boolean; message: string }> {
+    const nextStatus = currentStatus === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE';
+    const res = await this.updateEmployeeStatus(id, nextStatus);
+    return { success: true, message: res.message || "Đã cập nhật trạng thái nhân viên" };
   },
 
   /**

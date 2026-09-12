@@ -1,8 +1,6 @@
 package com.digitalbanking.service.impl;
 
-import com.digitalbanking.domain.dto.response.CustomerProfileDto;
 import com.digitalbanking.domain.dto.response.UserMeResponse;
-import com.digitalbanking.domain.entity.CustomerEntity;
 import com.digitalbanking.domain.entity.UserEntity;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
@@ -52,24 +50,6 @@ public class UserServiceImpl implements UserService {
             }
         });
 
-        Object profile = null;
-        CustomerEntity customer = user.getCustomer();
-        if (customer != null) {
-            profile = CustomerProfileDto.builder()
-                    .id(customer.getId())
-                    .customerCode(customer.getCustomerCode())
-                    .fullName(customer.getFullName())
-                    .nationalId(customer.getNationalId())
-                    .dateOfBirth(customer.getDateOfBirth())
-                    .address(customer.getAddress())
-                    .avatarUrl(customer.getAvatarUrl())
-                    .createdAt(customer.getCreatedAt())
-                    .updatedAt(customer.getUpdatedAt())
-                    .build();
-        }
-
-        // fetch employee profile
-
         return UserMeResponse.builder()
                 .id(user.getId())
                 .email(user.getEmail())
@@ -77,8 +57,6 @@ public class UserServiceImpl implements UserService {
                 .status(user.getStatus().name())
                 .roles(roles)
                 .permissions(permissions)
-                .profile(profile)
                 .build();
     }
-
 }

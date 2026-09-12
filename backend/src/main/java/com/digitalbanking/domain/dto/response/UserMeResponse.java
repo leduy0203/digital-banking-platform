@@ -19,5 +19,4 @@ public class UserMeResponse {
     private String status;
     private Set<String> roles;
     private Set<String> permissions;
-    private Object profile;
 }

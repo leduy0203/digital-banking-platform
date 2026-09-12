@@ -1,10 +1,38 @@
 "use client";
 
-import React, { useState } from "react";
-import { Search, Bell, RefreshCw, ChevronDown, ShieldCheck } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Search, Bell, RefreshCw, ChevronDown, ShieldCheck, User } from "lucide-react";
+import { employeeApi } from "@/lib/api";
 
 export function EmployeeHeader() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [profile, setProfile] = useState<{
+    fullName?: string;
+    employeeCode?: string;
+    department?: string;
+    email?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const data = await employeeApi.getMyProfile();
+        setProfile(data);
+      } catch (err) {
+        console.error("Failed to load employee profile in header", err);
+      }
+    }
+    loadProfile();
+  }, []);
+
+  const getInitials = (name?: string) => {
+    if (!name) return "NV";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   return (
     <header className="h-20 bg-[#0D1527] border-b border-slate-800/80 px-6 lg:px-8 flex items-center justify-between sticky top-0 z-10 shadow-lg w-full text-slate-100 selection:bg-[#A3E635] selection:text-slate-950">
@@ -36,7 +64,7 @@ export function EmployeeHeader() {
         {/* System Health Status */}
         <div className="hidden md:flex items-center gap-2.5 px-3.5 py-1.5 bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 text-xs font-bold rounded-full">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-          Core Banking: Online (Latency 12ms)
+          Core Banking: Online
         </div>
 
         {/* Refresh button */}
@@ -61,11 +89,15 @@ export function EmployeeHeader() {
         {/* Staff Profile */}
         <div className="flex items-center gap-3 cursor-pointer hover:opacity-90">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-[#A3E635] text-slate-950 flex items-center justify-center font-black text-sm shadow-md">
-            NVA
+            {getInitials(profile?.fullName)}
           </div>
           <div className="hidden lg:block text-left">
-            <p className="text-sm font-extrabold text-white leading-tight">Nguyễn Văn An</p>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">ROLE_EMPLOYEE</p>
+            <p className="text-sm font-extrabold text-white leading-tight">
+              {profile?.fullName || "Cán bộ Ngân hàng"}
+            </p>
+            <p className="text-xs text-slate-400 font-mono font-medium mt-0.5">
+              {profile?.employeeCode ? `${profile.employeeCode}` : "TELLER"}
+            </p>
           </div>
           <ChevronDown className="w-4 h-4 text-slate-400" />
         </div>

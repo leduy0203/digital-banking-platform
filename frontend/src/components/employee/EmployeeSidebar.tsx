@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
@@ -16,6 +16,7 @@ import {
   Landmark
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { employeeApi } from "@/lib/api";
 
 const navigationItems = [
   {
@@ -27,7 +28,7 @@ const navigationItems = [
     name: "Phê duyệt KYC",
     href: "/employee/kyc",
     icon: UserCheck,
-    badge: "28",
+    isKycBadge: true,
   },
   {
     name: "Quản lý Khách hàng",
@@ -53,10 +54,46 @@ const navigationItems = [
 
 export function EmployeeSidebar() {
   const pathname = usePathname();
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [profile, setProfile] = useState<{
+    fullName?: string;
+    employeeCode?: string;
+    department?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    async function loadSidebarData() {
+      try {
+        const [kycData, profileData] = await Promise.allSettled([
+          employeeApi.getPendingKycs({ status: "PENDING" }),
+          employeeApi.getMyProfile(),
+        ]);
+
+        if (kycData.status === "fulfilled") {
+          setPendingCount(kycData.value.totalElements);
+        }
+        if (profileData.status === "fulfilled") {
+          setProfile(profileData.value);
+        }
+      } catch (err) {
+        console.error("Failed to load sidebar dynamic data", err);
+      }
+    }
+    loadSidebarData();
+  }, [pathname]);
+
+  const getInitials = (name?: string) => {
+    if (!name) return "NV";
+    const parts = name.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
 
   return (
     <aside className="w-64 bg-[#0B1120] text-slate-300 flex flex-col h-screen sticky top-0 border-r border-slate-800/80 shadow-2xl z-20 shrink-0 selection:bg-[#A3E635] selection:text-slate-950">
-      {/* Brand Header (h-20 matches Topbar height h-20 for pixel-perfect line alignment) */}
+      {/* Brand Header */}
       <div className="h-20 px-6 border-b border-slate-800/80 flex items-center gap-3 shrink-0">
         <div className="h-10 w-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-[#A3E635] flex items-center justify-center text-slate-950 font-black shadow-lg shadow-[#A3E635]/20">
           <Landmark className="w-5 h-5" />
@@ -71,16 +108,22 @@ export function EmployeeSidebar() {
         </div>
       </div>
 
-      {/* Branch Info Badge (Spacious mt-5 mb-4) */}
+      {/* Branch / Department Info Badge */}
       <div className="mx-4 mt-5 mb-4 p-4 rounded-2xl bg-[#141C2E] border border-slate-800 text-xs flex items-center gap-3 text-slate-300 shadow-md">
         <Building2 className="w-5 h-5 text-[#A3E635] shrink-0" />
         <div className="truncate">
-          <p className="font-bold text-white truncate text-xs">CN Bến Thành - TPHCM</p>
-          <p className="text-[11px] text-slate-400 font-mono mt-0.5">Quầy: TELLER-04</p>
+          <p className="font-bold text-white truncate text-xs">
+            {profile?.department === "KYC_VERIFICATION" ? "Phòng Thẩm định eKYC" : 
+             profile?.department === "CUSTOMER_SERVICE" ? "CN Bến Thành - TPHCM" : 
+             "Hội Sở Chính"}
+          </p>
+          <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+            Mã NV: <strong className="text-[#A3E635]">{profile?.employeeCode || "EMP..."}</strong>
+          </p>
         </div>
       </div>
 
-      {/* Navigation Links (Spacious padding py-3.5 & gap-3.5) */}
+      {/* Navigation Links */}
       <nav className="flex-1 px-3 py-2 space-y-2 overflow-y-auto">
         <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
           Chức năng Vận hành
@@ -88,6 +131,7 @@ export function EmployeeSidebar() {
         {navigationItems.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
+          const showKycBadge = item.isKycBadge && pendingCount !== null && pendingCount > 0;
 
           return (
             <Link
@@ -104,12 +148,12 @@ export function EmployeeSidebar() {
                 <Icon className={cn("w-5 h-5 transition-transform group-hover:scale-110", isActive ? "text-[#A3E635]" : "text-emerald-400")} />
                 <span className="text-sm font-medium">{item.name}</span>
               </div>
-              {item.badge && (
+              {showKycBadge && (
                 <span className={cn(
-                  "px-2.5 py-0.5 text-[11px] font-extrabold rounded-full",
+                  "px-2.5 py-0.5 text-[11px] font-extrabold rounded-full animate-pulse",
                   isActive ? "bg-[#A3E635] text-slate-950" : "bg-amber-500 text-white"
                 )}>
-                  {item.badge}
+                  {pendingCount}
                 </span>
               )}
             </Link>
@@ -122,15 +166,19 @@ export function EmployeeSidebar() {
         <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#141C2E] border border-slate-800 shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-[#A3E635] text-slate-950 flex items-center justify-center font-black text-xs shadow-xs">
-              NV
+              {getInitials(profile?.fullName)}
             </div>
-            <div className="text-xs">
-              <p className="font-bold text-white leading-tight text-xs">Nguyễn Văn An</p>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Giao dịch viên (Teller)</p>
+            <div className="text-xs truncate max-w-[110px]">
+              <p className="font-bold text-white leading-tight text-xs truncate">
+                {profile?.fullName || "Cán bộ Quầy"}
+              </p>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                {profile?.employeeCode || "ROLE_TELLER"}
+              </p>
             </div>
           </div>
           <Link 
-            href="/login" 
+            href="/portal/login" 
             className="p-2 rounded-xl hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
             title="Đăng xuất"
           >

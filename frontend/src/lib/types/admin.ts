@@ -26,6 +26,26 @@ export interface RbacRole {
   isSystemRole: boolean;
 }
 
+export type DepartmentType = 
+  | 'CUSTOMER_SERVICE'
+  | 'KYC_VERIFICATION'
+  | 'RISK_MANAGEMENT'
+  | 'CARD_OPERATIONS'
+  | 'IT_OPERATIONS';
+
+export interface EmployeeProfileResponse {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  department: DepartmentType;
+  hireDate: string;
+  email: string;
+  phoneNumber: string;
+  status: 'ACTIVE' | 'BLOCKED' | 'PENDING';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface EmployeeUser {
   id: string;
   employeeCode: string;
@@ -33,19 +53,39 @@ export interface EmployeeUser {
   email: string;
   phone: string;
   branch: string;
-  role: SystemRole | string;
-  status: 'ACTIVE' | 'LOCKED' | 'SUSPENDED';
+  role: string;
+  status: "ACTIVE" | "LOCKED";
   createdAt: string;
   lastLogin: string;
 }
 
 export interface CreateEmployeePayload {
-  employeeCode: string;
   fullName: string;
   email: string;
-  phone: string;
-  branch: string;
-  role: string;
+  phoneNumber: string;
+  password?: string;
+  department: DepartmentType;
+  role: 'ROLE_TELLER' | 'ROLE_ADMIN';
+}
+
+export interface EmployeeFilterPayload {
+  keyword?: string;
+  department?: DepartmentType;
+  status?: 'ACTIVE' | 'BLOCKED' | 'PENDING';
+  role?: 'ROLE_TELLER' | 'ROLE_ADMIN';
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
+}
+
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  isLast: boolean;
 }
 
 export interface SchedulerJob {

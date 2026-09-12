@@ -13,29 +13,61 @@ import {
   FileText, 
   Clock, 
   Activity, 
-  ChevronRight
+  ChevronRight,
+  ShieldCheck
 } from "lucide-react";
 import { employeeApi } from "@/lib/api";
-import { EmployeeDashboardStats, KycApplication } from "@/lib/types/employee";
+import { EmployeeDashboardStats, KycDocumentResponse } from "@/lib/types/employee";
+
+export const DEPARTMENT_TITLE: Record<string, string> = {
+  KYC_VERIFICATION: "Phòng Thẩm định eKYC",
+  CUSTOMER_SERVICE: "Dịch vụ Khách hàng & Quầy",
+  CARD_OPERATIONS: "Vận hành Thẻ & Thanh toán",
+  RISK_MANAGEMENT: "Quản trị Rủi ro & Kiểm soát",
+  IT_OPERATIONS: "Công nghệ & Quản trị Hệ thống",
+};
 
 export default function EmployeeDashboardPage() {
   const [stats, setStats] = useState<EmployeeDashboardStats | null>(null);
-  const [pendingKyc, setPendingKyc] = useState<KycApplication[]>([]);
+  const [pendingKycs, setPendingKycs] = useState<KycDocumentResponse[]>([]);
+  const [pendingCount, setPendingCount] = useState<number>(0);
+  const [profile, setProfile] = useState<{
+    fullName?: string;
+    employeeCode?: string;
+    department?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadData() {
       setLoading(true);
-      const [statsData, kycData] = await Promise.all([
-        employeeApi.getDashboardStats(),
-        employeeApi.getKycApplications(),
-      ]);
-      setStats(statsData);
-      setPendingKyc(kycData.filter(k => k.status === "PENDING"));
-      setLoading(false);
+      try {
+        const [statsData, kycPageData, profileData] = await Promise.allSettled([
+          employeeApi.getDashboardStats(),
+          employeeApi.getPendingKycs({ status: "PENDING", page: 0, size: 5 }),
+          employeeApi.getMyProfile(),
+        ]);
+
+        if (statsData.status === "fulfilled") {
+          setStats(statsData.value);
+        }
+        if (kycPageData.status === "fulfilled") {
+          setPendingKycs(kycPageData.value.items || []);
+          setPendingCount(kycPageData.value.totalElements || 0);
+        }
+        if (profileData.status === "fulfilled") {
+          setProfile(profileData.value);
+        }
+      } catch (err) {
+        console.error("Error loading dashboard data", err);
+      } finally {
+        setLoading(false);
+      }
     }
     loadData();
   }, []);
+
+  const departmentName = profile?.department ? (DEPARTMENT_TITLE[profile.department] || profile.department) : "Bàn Vận Hành Quầy";
 
   return (
     <div className="w-full max-w-[1700px] mx-auto px-6 lg:px-8 py-6 space-y-6 text-slate-100 selection:bg-[#A3E635] selection:text-slate-950">
@@ -43,11 +75,13 @@ export default function EmployeeDashboardPage() {
       <div className="bg-gradient-to-br from-[#0B1120] via-[#141C2E] to-[#1E293B] border border-slate-800 p-6 lg:p-7 rounded-3xl shadow-xl relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="relative z-10">
           <span className="px-3 py-1 rounded-full bg-[#A3E635]/10 text-[#A3E635] border border-[#A3E635]/30 text-xs font-semibold uppercase tracking-wider">
-            Bàn Vận Hành Quầy • CN Bến Thành
+            {departmentName} • {profile?.employeeCode || "STAFF"}
           </span>
-          <h1 className="text-2xl md:text-3xl font-black mt-2 tracking-tight text-white">Xin chào, Nguyễn Văn An 👋</h1>
+          <h1 className="text-2xl md:text-3xl font-black mt-2 tracking-tight text-white">
+            Xin chào, {profile?.fullName || "Cán bộ Ngân hàng"} 👋
+          </h1>
           <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-3xl">
-            Hôm nay bạn có <strong className="text-[#A3E635] underline font-bold">{stats?.pendingKycCount || 28} hồ sơ KYC chờ duyệt</strong> và <strong className="text-white font-bold">12 giao dịch quầy cần xử lý</strong>.
+            Hôm nay hệ thống có <strong className="text-[#A3E635] underline font-bold">{pendingCount} hồ sơ KYC chờ thẩm định</strong> và <strong className="text-white font-bold">12 giao dịch quầy cần xử lý</strong>.
           </p>
         </div>
 
@@ -56,7 +90,7 @@ export default function EmployeeDashboardPage() {
             href="/employee/kyc"
             className="px-4 py-2.5 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-[#A3E635]/20 transition-all flex items-center gap-2"
           >
-            <UserCheck className="w-4 h-4" /> Duyệt KYC ngay ({stats?.pendingKycCount || 28})
+            <UserCheck className="w-4 h-4" /> Duyệt KYC ngay ({pendingCount})
           </Link>
           <Link 
             href="/employee/cash-ops"
@@ -121,176 +155,132 @@ export default function EmployeeDashboardPage() {
             </div>
           </div>
           <div className="mt-3">
-            <h3 className="text-2xl font-extrabold text-amber-400">{stats?.pendingKycCount || 28} Hồ sơ</h3>
+            <h3 className="text-2xl font-extrabold text-white">{pendingCount}</h3>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs font-semibold text-amber-400">Ưu tiên xử lý</span>
-              <span className="text-[11px] text-slate-400">• Chờ ~15m</span>
+              <span className="text-xs font-semibold text-amber-400">Cần xử lý trong ngày</span>
             </div>
           </div>
         </div>
 
-        {/* Frozen Accounts */}
+        {/* System & Branch Security Status */}
         <div className="bg-[#141C2E] p-5 rounded-3xl border border-slate-800 shadow-xl">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">TK Cảnh Báo / Khóa</span>
-            <div className="w-10 h-10 rounded-2xl bg-red-950/80 text-red-400 border border-red-500/30 flex items-center justify-center font-bold">
-              <ShieldAlert className="w-5 h-5" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Trạng Thái An Ninh</span>
+            <div className="w-10 h-10 rounded-2xl bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold">
+              <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
           <div className="mt-3">
-            <h3 className="text-2xl font-extrabold text-red-400">{stats?.frozenAccountCount || 5} TK</h3>
+            <h3 className="text-2xl font-extrabold text-emerald-400">Ổn định</h3>
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-xs font-semibold text-red-400">02 mở khóa</span>
-              <span className="text-[11px] text-slate-400">• Thẩm định</span>
+              <span className="text-xs font-semibold text-slate-400">Không có cảnh báo gian lận</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Main Grid Layout */}
+      {/* Main Grid: Pending KYC queue & Quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left 8 Cols: Urgent KYC Queue */}
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-[#141C2E] rounded-3xl border border-slate-800 shadow-xl overflow-hidden">
-            <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-[#A3E635]" /> Hồ Sơ KYC Cần Xử Lý Gấp
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">Danh sách mở tài khoản eKYC mới từ ứng dụng mobile</p>
-              </div>
-              <Link href="/employee/kyc" className="text-xs font-bold text-[#A3E635] hover:underline flex items-center gap-1">
-                Xem tất cả <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-300">
-                <thead className="bg-[#0D1527] text-slate-400 uppercase font-semibold border-b border-slate-800">
-                  <tr>
-                    <th className="px-5 py-3.5">Mã CIF</th>
-                    <th className="px-5 py-3.5">Họ & Tên</th>
-                    <th className="px-5 py-3.5">Số CCCD</th>
-                    <th className="px-5 py-3.5">Khớp Khai Báo</th>
-                    <th className="px-5 py-3.5 text-right">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/80">
-                  {pendingKyc.map((kyc) => (
-                    <tr key={kyc.id} className="hover:bg-[#1E293B]/50 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs font-bold text-white">{kyc.cif}</td>
-                      <td className="px-5 py-3.5 font-bold text-white">{kyc.fullName}</td>
-                      <td className="px-5 py-3.5 font-mono text-xs text-slate-400">{kyc.idNumber}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                          kyc.aiScore > 90 ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/30" : "bg-amber-950/80 text-amber-300 border border-amber-500/30"
-                        }`}>
-                          {kyc.aiScore}% ({kyc.aiScore > 90 ? "Match" : "Check Ảnh"})
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <Link 
-                          href="/employee/kyc"
-                          className="px-3.5 py-1.5 bg-[#A3E635] text-slate-950 text-xs font-bold rounded-xl hover:bg-[#86efac] transition-colors"
-                        >
-                          Thẩm định
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+        {/* Pending KYC Quick View (7 cols) */}
+        <div className="lg:col-span-7 bg-[#141C2E] rounded-3xl border border-slate-800 shadow-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-[#A3E635]" /> Hàng đợi eKYC mới nhất
+            </h2>
+            <Link 
+              href="/employee/kyc"
+              className="text-xs text-[#A3E635] hover:underline flex items-center gap-1 font-semibold"
+            >
+              Xem tất cả ({pendingCount}) <ChevronRight className="w-4 h-4" />
+            </Link>
           </div>
 
-          {/* Activity Cashflow Flow Bar */}
-          <div className="bg-[#141C2E] p-5 rounded-3xl border border-slate-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-400" /> Biểu Đồ Dòng Tiền Quầy Trong Ngày
-              </h2>
-              <span className="text-xs text-slate-400 font-medium">Cập nhật real-time</span>
-            </div>
-
-            <div className="space-y-3 pt-2">
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-400">Tổng Nạp Tiền Mặt (Cash In)</span>
-                  <span className="text-[#A3E635] font-bold font-mono">₫ 28,450,000,000</span>
-                </div>
-                <div className="w-full bg-[#0D1527] h-2.5 rounded-full overflow-hidden border border-slate-800">
-                  <div className="bg-[#A3E635] h-full rounded-full" style={{ width: "65%" }}></div>
-                </div>
+          <div className="space-y-3">
+            {pendingKycs.length === 0 ? (
+              <div className="p-8 text-center text-slate-500 text-xs">
+                Hiện không có hồ sơ nào đang chờ duyệt.
               </div>
+            ) : (
+              pendingKycs.map((item) => (
+                <div 
+                  key={item.id}
+                  className="p-4 rounded-2xl bg-[#0D1527] border border-slate-800/80 hover:border-slate-700 transition-all flex items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-[#1E293B] border border-slate-700 flex items-center justify-center font-mono font-bold text-white text-xs">
+                      {item.customerCode ? item.customerCode.substring(0, 3) : "CIF"}
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-sm">{item.fullName}</p>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">
+                        CCCD: <strong>{item.nationalId}</strong> • SĐT: {item.phoneNumber}
+                      </p>
+                    </div>
+                  </div>
 
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-400">Tổng Rút Tiền Mặt (Cash Out)</span>
-                  <span className="text-blue-400 font-bold font-mono">₫ 16,750,000,000</span>
+                  <div className="text-right shrink-0">
+                    <Link
+                      href="/employee/kyc"
+                      className="px-3.5 py-1.5 bg-[#A3E635]/20 hover:bg-[#A3E635] text-[#A3E635] hover:text-slate-950 font-bold text-xs rounded-xl border border-[#A3E635]/30 transition-all"
+                    >
+                      Thẩm định
+                    </Link>
+                  </div>
                 </div>
-                <div className="w-full bg-[#0D1527] h-2.5 rounded-full overflow-hidden border border-slate-800">
-                  <div className="bg-blue-500 h-full rounded-full" style={{ width: "40%" }}></div>
-                </div>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* Right 4 Cols: Quick Teller Shortcuts */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-[#141C2E] p-5 rounded-3xl border border-slate-800 shadow-xl space-y-3">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nghiệp Vụ Quầy Nhanh</h2>
-            
-            <Link href="/employee/cash-ops?tab=DEPOSIT" className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-800 hover:border-[#A3E635] hover:bg-[#0D1527] transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-950/80 text-[#A3E635] border border-emerald-500/30 flex items-center justify-center">
-                  <ArrowDownLeft className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-[#A3E635]">Nạp Tiền Mặt Vấn Tin</p>
-                  <p className="text-[10px] text-slate-400">Nạp trực tiếp vào STK khách hàng</p>
-                </div>
+        {/* Quick Operations (5 cols) */}
+        <div className="lg:col-span-5 bg-[#141C2E] rounded-3xl border border-slate-800 shadow-xl p-6 space-y-4">
+          <h2 className="text-base font-extrabold text-white flex items-center gap-2">
+            <Activity className="w-5 h-5 text-[#A3E635]" /> Nghiệp Vụ Trực Tuyến Nhanh
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              href="/employee/cash-ops"
+              className="p-4 bg-[#0D1527] hover:bg-[#1E293B] border border-slate-800 rounded-2xl transition-all group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-emerald-950/80 text-[#A3E635] border border-emerald-500/30 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <Banknote className="w-5 h-5" />
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              <p className="font-bold text-white text-xs">Nạp / Rút Quầy</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Xử lý giao dịch tiền mặt</p>
             </Link>
 
-            <Link href="/employee/cash-ops?tab=WITHDRAW" className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-800 hover:border-blue-500 hover:bg-[#0D1527] transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-blue-950/80 text-blue-400 border border-blue-500/30 flex items-center justify-center">
-                  <ArrowUpRight className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-blue-400">Rút Tiền Xác Minh Chữ Ký</p>
-                  <p className="text-[10px] text-slate-400">Đối chiếu chữ ký mẫu + OTP</p>
-                </div>
+            <Link
+              href="/employee/customers"
+              className="p-4 bg-[#0D1527] hover:bg-[#1E293B] border border-slate-800 rounded-2xl transition-all group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-blue-950/80 text-blue-400 border border-blue-500/30 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <Users className="w-5 h-5" />
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              <p className="font-bold text-white text-xs">Tra Cứu Khách Hàng</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Hồ sơ Customer 360</p>
             </Link>
 
-            <Link href="/employee/accounts" className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-800 hover:border-red-500 hover:bg-[#0D1527] transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-red-950/80 text-red-400 border border-red-500/30 flex items-center justify-center">
-                  <ShieldAlert className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white group-hover:text-red-400">Khóa / Mở Khóa Tài Khoản</p>
-                  <p className="text-[10px] text-slate-400">Cập nhật trạng thái phong tỏa</p>
-                </div>
+            <Link
+              href="/employee/accounts"
+              className="p-4 bg-[#0D1527] hover:bg-[#1E293B] border border-slate-800 rounded-2xl transition-all group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <CreditCard className="w-5 h-5" />
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              <p className="font-bold text-white text-xs">Quản Lý Tài Khoản</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Khóa & Phong tỏa tài khoản</p>
             </Link>
 
-            <Link href="/employee/transactions" className="flex items-center justify-between p-3.5 rounded-2xl border border-slate-800 hover:border-slate-600 hover:bg-[#0D1527] transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white">Yêu Cầu Rollback / Đảo GD</p>
-                  <p className="text-[10px] text-slate-400">Kiểm soát 2 cấp Maker-Checker</p>
-                </div>
+            <Link
+              href="/employee/transactions"
+              className="p-4 bg-[#0D1527] hover:bg-[#1E293B] border border-slate-800 rounded-2xl transition-all group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-purple-950/80 text-purple-400 border border-purple-500/30 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                <FileText className="w-5 h-5" />
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              <p className="font-bold text-white text-xs">Lịch Sử & Rollback</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Tra soát và hoàn tác lệnh</p>
             </Link>
           </div>
         </div>
