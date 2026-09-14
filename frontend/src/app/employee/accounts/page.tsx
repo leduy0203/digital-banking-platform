@@ -9,10 +9,16 @@ import {
   Unlock, 
   CheckCircle2, 
   X,
-  Sparkles
+  Sparkles,
+  Plus,
+  Loader2,
+  Wallet,
+  PiggyBank,
+  Coins
 } from "lucide-react";
 import { employeeApi } from "@/lib/api";
 import { AccountItem } from "@/lib/types/employee";
+import { CustomSelect } from "@/components/ui/CustomSelect";
 
 export default function AccountManagementPage() {
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
@@ -21,9 +27,16 @@ export default function AccountManagementPage() {
   const [selectedAcc, setSelectedAcc] = useState<AccountItem | null>(null);
   const [freezeModalOpen, setFreezeModalOpen] = useState(false);
   const [unfreezeModalOpen, setUnfreezeModalOpen] = useState(false);
+  const [openAccountModalOpen, setOpenAccountModalOpen] = useState(false);
+
+  // New Account State
+  const [newCustomerId, setNewCustomerId] = useState("");
+  const [newAccountType, setNewAccountType] = useState<"CHECKING" | "SAVINGS">("CHECKING");
+  const [newCurrency, setNewCurrency] = useState("VND");
+  const [isSubmittingNewAcc, setIsSubmittingNewAcc] = useState(false);
 
   // Freeze Modal State
-  const [lockType, setLockType] = useState<"FROZEN" | "DEBIT_LOCKED">("FROZEN");
+  const [lockType, setLockType] = useState<"FROZEN" | "BLOCKED">("BLOCKED");
   const [reason, setReason] = useState("Khách hàng báo mất thiết bị đăng nhập & nghi vấn gian lận");
   const [refCode, setRefCode] = useState("");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -38,31 +51,60 @@ export default function AccountManagementPage() {
     loadData();
   }, [searchTerm]);
 
+  const handleOpenAccountSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerId.trim()) {
+      showToast("Vui lòng nhập Customer ID hoặc Mã CIF của khách hàng");
+      return;
+    }
+
+    setIsSubmittingNewAcc(true);
+    try {
+      const res = await employeeApi.openAccount({
+        customerId: newCustomerId.trim(),
+        accountType: newAccountType,
+        currency: newCurrency,
+        initialDeposit: 0,
+      });
+
+      showToast(res.message || "Mở tài khoản thành công!");
+      setOpenAccountModalOpen(false);
+      setNewCustomerId("");
+      // Refresh accounts list
+      const data = await employeeApi.getAccounts(searchTerm);
+      setAccounts(data);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || "Mở tài khoản thất bại";
+      showToast(msg);
+    } finally {
+      setIsSubmittingNewAcc(false);
+    }
+  };
+
   const handleFreezeConfirm = async () => {
     if (!selectedAcc) return;
-    const res = await employeeApi.freezeAccount({
-      accountNumber: selectedAcc.accountNumber,
-      lockType,
-      reason,
-      refCode,
-    });
-    
-    // Refresh list
-    const updated = await employeeApi.getAccounts(searchTerm);
-    setAccounts(updated);
-    setFreezeModalOpen(false);
-    showToast(res.message);
+    try {
+      const res = await employeeApi.updateAccountStatus(selectedAcc.accountNumber, lockType);
+      const updated = await employeeApi.getAccounts(searchTerm);
+      setAccounts(updated);
+      setFreezeModalOpen(false);
+      showToast(res.message || `Đã cập nhật trạng thái tài khoản ${selectedAcc.accountNumber} sang ${lockType}`);
+    } catch (err: any) {
+      showToast(err.message || "Cập nhật trạng thái thất bại");
+    }
   };
 
   const handleUnfreezeConfirm = async () => {
     if (!selectedAcc) return;
-    const res = await employeeApi.unfreezeAccount(selectedAcc.accountNumber);
-    
-    // Refresh list
-    const updated = await employeeApi.getAccounts(searchTerm);
-    setAccounts(updated);
-    setUnfreezeModalOpen(false);
-    showToast(res.message);
+    try {
+      const res = await employeeApi.updateAccountStatus(selectedAcc.accountNumber, 'ACTIVE');
+      const updated = await employeeApi.getAccounts(searchTerm);
+      setAccounts(updated);
+      setUnfreezeModalOpen(false);
+      showToast(res.message || `Đã kích hoạt lại tài khoản ${selectedAcc.accountNumber}`);
+    } catch (err: any) {
+      showToast(err.message || "Mở khóa tài khoản thất bại");
+    }
   };
 
   const showToast = (msg: string) => {
@@ -74,7 +116,7 @@ export default function AccountManagementPage() {
     <div className="w-full max-w-[1700px] mx-auto px-6 lg:px-8 py-6 space-y-6 text-slate-100 selection:bg-[#A3E635] selection:text-slate-950">
       {/* Toast */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 bg-[#141C2E] text-white px-5 py-3 rounded-2xl shadow-2xl z-50 flex items-center gap-3 border border-slate-700 animate-in fade-in">
+        <div className="fixed top-6 right-6 bg-[#141C2E] text-white px-5 py-3 rounded-2xl shadow-2xl z-50 flex items-center gap-3 border border-slate-700 animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-[#A3E635] shrink-0" />
           <p className="text-sm font-medium">{toastMessage}</p>
         </div>
@@ -84,10 +126,18 @@ export default function AccountManagementPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-white flex items-center gap-2">
-            <CreditCard className="w-7 h-7 text-[#A3E635]" /> Quản Lý & Phong Tỏa Tài Khoản (Account Freeze / Unfreeze)
+            <CreditCard className="w-7 h-7 text-[#A3E635]" /> Quản Lý & Khóa/Mở Tài Khoản (Account Operations)
           </h1>
-          <p className="text-xs text-slate-400">Tra cứu trạng thái tài khoản thanh toán và xử lý phong tỏa/mở khóa theo quy trình</p>
+          <p className="text-xs text-slate-400">Tra cứu trạng thái tài khoản thanh toán và xử lý mở mới / phong tỏa / mở khóa theo quy trình</p>
         </div>
+
+        <button
+          onClick={() => setOpenAccountModalOpen(true)}
+          className="bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 transition-all shadow-md cursor-pointer shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Mở Tài Khoản Tại Quầy</span>
+        </button>
       </div>
 
       {/* Search Bar */}
@@ -194,16 +244,17 @@ export default function AccountManagementPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-300 block mb-1">Loại Hình Phong Tỏa</label>
-                <select
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-300 block text-xs">Loại Hình Khóa / Phong Tỏa</label>
+                <CustomSelect
                   value={lockType}
-                  onChange={(e) => setLockType(e.target.value as any)}
-                  className="w-full p-3 bg-[#0D1527] border border-slate-700 rounded-xl focus:ring-2 focus:ring-red-500 font-medium text-white"
-                >
-                  <option value="FROZEN">Khóa toàn bộ (Khóa cả Ghi nợ & Ghi có)</option>
-                  <option value="DEBIT_LOCKED">Khóa chiều Ghi nợ (Chỉ cho nạp tiền, không cho rút)</option>
-                </select>
+                  onChange={(val) => setLockType(val as any)}
+                  options={[
+                    { value: "BLOCKED", label: "Khóa Tài Khoản (BLOCKED)", icon: Lock },
+                    { value: "FROZEN", label: "Phong Tỏa Số Dư (FROZEN)", icon: ShieldAlert },
+                  ]}
+                  menuWidth="w-full"
+                />
               </div>
 
               <div>
@@ -265,6 +316,83 @@ export default function AccountManagementPage() {
                 Xác Nhận Mở Khóa
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Open Account Modal */}
+      {openAccountModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in">
+          <div className="bg-[#141C2E] rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-700 text-white">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="font-bold text-base text-white flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#A3E635]" /> Mở Tài Khoản Thanh Toán Mới Tại Quầy
+              </h3>
+              <button onClick={() => setOpenAccountModalOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleOpenAccountSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-slate-300 block mb-1">Customer ID / UUID Khách Hàng <span className="text-red-400">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={newCustomerId}
+                  onChange={(e) => setNewCustomerId(e.target.value)}
+                  placeholder="Ví dụ: a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+                  className="w-full p-3 bg-[#0D1527] border border-slate-700 rounded-xl text-xs focus:ring-2 focus:ring-[#A3E635] font-mono text-white"
+                />
+                <span className="text-[10px] text-slate-500 mt-1 block">Khách hàng bắt buộc phải hoàn thành eKYC trước khi mở tài khoản.</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-300 block text-xs">Loại Tài Khoản</label>
+                  <CustomSelect
+                    value={newAccountType}
+                    onChange={(val) => setNewAccountType(val as any)}
+                    options={[
+                      { value: "CHECKING", label: "Thanh toán (CHECKING)", icon: Wallet },
+                      { value: "SAVINGS", label: "Tiết kiệm (SAVINGS)", icon: PiggyBank },
+                    ]}
+                    menuWidth="w-full"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-bold text-slate-300 block text-xs">Loại Tiền Tệ</label>
+                  <CustomSelect
+                    value={newCurrency}
+                    onChange={(val) => setNewCurrency(val)}
+                    options={[
+                      { value: "VND", label: "VND (Việt Nam Đồng)", icon: Coins },
+                      { value: "USD", label: "USD (Đô la Mỹ)", icon: Coins },
+                    ]}
+                    menuWidth="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setOpenAccountModalOpen(false)}
+                  className="px-4 py-2.5 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingNewAcc}
+                  className="px-5 py-2.5 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center gap-2"
+                >
+                  {isSubmittingNewAcc && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Xác Nhận Mở Tài Khoản</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

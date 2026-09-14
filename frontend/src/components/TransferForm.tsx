@@ -99,6 +99,11 @@ export function TransferForm() {
   // Available source accounts state
   const [userAccounts, setUserAccounts] = useState<AccountResponseData[]>([]);
 
+  // Recipient Auto-Lookup State
+  const [lookupName, setLookupName] = useState<string | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
   const {
     register,
     handleSubmit,
@@ -116,6 +121,47 @@ export function TransferForm() {
       description: 'Chuyen tien',
     },
   });
+
+  const selectedSourceAccount = watch('sourceAccountNumber');
+  const selectedBankCode = watch('bankCode');
+  const targetAccountNumber = watch('targetAccountNumber');
+  const rawFormattedAmount = watch('formattedAmount');
+
+  // Debounce Auto-Lookup for DBC (Digital Bank)
+  useEffect(() => {
+    if (!targetAccountNumber || targetAccountNumber.trim().length < 6) {
+      setLookupName(null);
+      setLookupError(null);
+      return;
+    }
+
+    if (selectedBankCode === 'DBC') {
+      setIsLookingUp(true);
+      setLookupError(null);
+      const timer = setTimeout(async () => {
+        try {
+          const res = await accountApi.lookupAccount(targetAccountNumber.trim());
+          if (res?.success && res.data) {
+            setLookupName(res.data.accountName);
+            setLookupError(null);
+          } else {
+            setLookupName(null);
+            setLookupError('Không tìm thấy tài khoản thụ hưởng.');
+          }
+        } catch (err: any) {
+          setLookupName(null);
+          setLookupError(err.response?.data?.detail || 'Tài khoản thụ hưởng không tồn tại hoặc đã bị khóa.');
+        } finally {
+          setIsLookingUp(false);
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    } else {
+      setLookupName(null);
+      setLookupError(null);
+    }
+  }, [targetAccountNumber, selectedBankCode]);
 
   useEffect(() => {
     accountApi.getMyAccounts()
@@ -138,10 +184,6 @@ export function TransferForm() {
     : [
         { number: '9333436513', name: 'Tài khoản thanh toán mặc định', balance: 0, currency: 'VND' },
       ];
-
-  const selectedSourceAccount = watch('sourceAccountNumber');
-  const selectedBankCode = watch('bankCode');
-  const rawFormattedAmount = watch('formattedAmount');
 
   // Calculate numerical amount from formatted dot string
   const numericAmount = parseInt((rawFormattedAmount || '').replace(/\D/g, ''), 10) || 0;
@@ -443,13 +485,38 @@ export function TransferForm() {
 
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-400 font-medium">Tài khoản / Thẻ nhận</label>
-                <Input
-                  type="text"
-                  placeholder="Nhập 10 chữ số số tài khoản thụ hưởng"
-                  {...register('targetAccountNumber')}
-                  className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] text-white font-mono rounded-2xl h-13 text-base font-bold placeholder:text-slate-500 placeholder:font-normal placeholder:text-sm transition-all"
-                />
-                {errors.targetAccountNumber && (
+                <div className="relative">
+                  <Input
+                    type="text"
+                    placeholder="Nhập 10 chữ số số tài khoản thụ hưởng"
+                    {...register('targetAccountNumber')}
+                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] text-white font-mono rounded-2xl h-13 text-base font-bold placeholder:text-slate-500 placeholder:font-normal placeholder:text-sm transition-all pr-10"
+                  />
+                  {isLookingUp && (
+                    <div className="absolute right-4 top-4 text-xs text-slate-400 animate-pulse">
+                      Đang tra cứu...
+                    </div>
+                  )}
+                </div>
+
+                {lookupName && (
+                  <div className="bg-emerald-950/60 border border-emerald-500/40 rounded-xl p-3 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-150">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-[#A3E635]" />
+                      <span className="text-xs text-slate-300 font-medium">Chủ tài khoản:</span>
+                      <span className="text-xs font-black text-[#A3E635] tracking-wide">{lookupName}</span>
+                    </div>
+                    <Badge variant="outline" className="border-emerald-700 text-emerald-400 text-[10px]">
+                      Hợp lệ
+                    </Badge>
+                  </div>
+                )}
+
+                {lookupError && (
+                  <p className="text-xs text-red-400 font-medium animate-in fade-in">{lookupError}</p>
+                )}
+
+                {errors.targetAccountNumber && !lookupError && (
                   <p className="text-xs text-red-400 font-medium">{errors.targetAccountNumber.message}</p>
                 )}
               </div>

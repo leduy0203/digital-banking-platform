@@ -16,12 +16,16 @@ import {
   Lock,
   ArrowLeft
 } from "lucide-react";
+import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { authApi } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 export default function ChangePasswordPage() {
+  const router = useRouter();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,7 +39,7 @@ export default function ChangePasswordPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Live password criteria validation
-  const hasMinLength = newPassword.length >= 8;
+  const hasMinLength = newPassword.length >= 6;
   const hasUppercase = /[A-Z]/.test(newPassword);
   const hasLowercase = /[a-z]/.test(newPassword);
   const hasNumber = /[0-9]/.test(newPassword);
@@ -46,15 +50,15 @@ export default function ChangePasswordPage() {
   
   let strengthLabel = "Rất yếu";
   let strengthColor = "bg-red-500";
-  if (validCount >= 5) {
+  if (validCount >= 4) {
     strengthLabel = "Cực kỳ mạnh 🛡️";
     strengthColor = "bg-[#A3E635]";
-  } else if (validCount >= 3) {
+  } else if (validCount >= 2) {
     strengthLabel = "Trung bình";
     strengthColor = "bg-amber-400";
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -63,8 +67,8 @@ export default function ChangePasswordPage() {
       return;
     }
 
-    if (validCount < 4) {
-      setErrorMessage("Mật khẩu mới chưa đạt yêu cầu độ mạnh tối thiểu.");
+    if (!hasMinLength) {
+      setErrorMessage("Mật khẩu mới phải có tối thiểu 6 ký tự.");
       return;
     }
 
@@ -73,11 +77,30 @@ export default function ChangePasswordPage() {
       return;
     }
 
+    if (currentPassword === newPassword) {
+      setErrorMessage("Mật khẩu mới không được trùng với mật khẩu hiện tại.");
+      return;
+    }
+
     setIsSubmitting(true);
-    setTimeout(() => {
-      setIsSubmitting(false);
+
+    try {
+      await authApi.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
       setIsSuccess(true);
-    }, 1200);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.response?.data?.message || err.message || "Đổi mật khẩu thất bại. Vui lòng kiểm tra lại.";
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -87,35 +110,8 @@ export default function ChangePasswordPage() {
 
       {/* Main Viewport Column (Fixed Header + Scrollable Body) */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
-        {/* Taller & Spacious Fixed Topbar (h-20) */}
-        <header className="h-20 px-8 flex items-center justify-between text-xs text-slate-300 border-b border-slate-800/80 bg-[#0D1527]/95 backdrop-blur-md shrink-0 z-30 shadow-md">
-          <div className="flex items-center gap-3 bg-[#141C2E] border border-slate-800/80 px-4 py-2 rounded-full">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-xs shadow-md">
-              CD
-            </div>
-            <div className="flex flex-col">
-              <span className="font-extrabold text-white text-sm tracking-wide">LÊ CÔNG DUY</span>
-              <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-0.5">
-                <ShieldCheck className="w-3 h-3" /> Tiêu chuẩn &gt;
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-8 text-sm">
-            <Link href="/settings" className="flex items-center gap-2 text-white font-bold transition-colors">
-              <SettingsIcon className="w-4 h-4 text-[#A3E635]" />
-              <span>Cài đặt</span>
-            </Link>
-            <button className="flex items-center gap-2 hover:text-white transition-colors">
-              <Globe className="w-4 h-4 text-emerald-400" />
-              <span className="font-semibold text-slate-200">English</span>
-            </button>
-            <Link href="/login" className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors">
-              <Power className="w-4 h-4" />
-              <span>Đăng xuất</span>
-            </Link>
-          </div>
-        </header>
+        {/* Dynamic Connected Topbar */}
+        <CustomerTopbar />
 
         {/* Scrollable Main Content Body */}
         <main className="flex-1 p-8 space-y-6 overflow-y-auto">
@@ -158,10 +154,18 @@ export default function ChangePasswordPage() {
                   </p>
                 </div>
 
-                <div className="pt-4 flex gap-4">
-                  <Link href="/dashboard" className="w-full">
-                    <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3.5 rounded-full shadow-lg shadow-[#A3E635]/20 h-12">
-                      Về Trang Chủ Dashboard
+                <div className="pt-4 flex flex-col sm:flex-row gap-3">
+                  <Button
+                    type="button"
+                    onClick={() => setIsSuccess(false)}
+                    variant="outline"
+                    className="flex-1 border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold text-xs rounded-full h-12"
+                  >
+                    Ở lại trang Cài đặt
+                  </Button>
+                  <Link href="/dashboard" className="flex-1">
+                    <Button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-xs rounded-full shadow-lg shadow-[#A3E635]/20 h-12">
+                      Về Trang Chủ Dashboard &gt;
                     </Button>
                   </Link>
                 </div>

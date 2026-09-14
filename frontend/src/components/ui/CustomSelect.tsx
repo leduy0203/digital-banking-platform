@@ -44,31 +44,31 @@ export function CustomSelect({
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative inline-block text-left ${className}`}>
-      {/* Trigger button */}
+    <div ref={containerRef} className={`relative block w-full text-left ${className}`}>
+      {/* Trigger button - Siêu nhạy, phản hồi tức thì */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`w-full flex items-center justify-between gap-2.5 px-3.5 py-2 bg-[#0B0F17] hover:bg-[#101726] border border-slate-800 hover:border-slate-700 rounded-xl text-xs text-white font-medium transition-all shadow-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${
-          isOpen ? "ring-1 ring-indigo-500 border-indigo-500/80 bg-[#101726]" : ""
+        className={`w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 bg-[#0D1527] hover:bg-[#141C2E] border border-slate-700 hover:border-[#A3E635]/60 rounded-xl text-xs text-white font-medium shadow-xs focus:outline-none focus:ring-1 focus:ring-[#A3E635] cursor-pointer active:scale-[0.99] transition-transform ${
+          isOpen ? "ring-1 ring-[#A3E635] border-[#A3E635] bg-[#141C2E]" : ""
         }`}
       >
-        <div className="flex items-center gap-2 truncate">
-          {LeadingIcon && <LeadingIcon className="w-3.5 h-3.5 text-slate-400 shrink-0" />}
-          {selectedOption?.icon && <selectedOption.icon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />}
-          <span className="truncate text-slate-200">{selectedOption ? selectedOption.label : placeholder}</span>
+        <div className="flex items-center gap-2.5 truncate">
+          {LeadingIcon && <LeadingIcon className="w-4 h-4 text-slate-400 shrink-0" />}
+          {selectedOption?.icon && <selectedOption.icon className="w-4 h-4 text-[#A3E635] shrink-0" />}
+          <span className="truncate text-slate-200 font-semibold">{selectedOption ? selectedOption.label : placeholder}</span>
         </div>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200 ${
-            isOpen ? "rotate-180 text-indigo-400" : ""
+          className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-150 ${
+            isOpen ? "rotate-180 text-[#A3E635]" : ""
           }`}
         />
       </button>
 
-      {/* Dropdown Menu Popover */}
+      {/* Dropdown Menu Popover - Render ngay lập tức không bị delay */}
       {isOpen && (
         <div
-          className={`absolute left-0 right-0 sm:right-auto mt-1.5 ${menuWidth} min-w-[200px] bg-[#141C2E] border border-slate-700/80 rounded-2xl shadow-2xl z-50 py-1.5 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md`}
+          className={`absolute left-0 right-0 mt-1.5 ${menuWidth} min-w-[200px] bg-[#141C2E] border border-slate-700 rounded-xl shadow-2xl z-50 py-1`}
         >
           <div className="max-h-60 overflow-y-auto px-1 space-y-0.5 custom-scrollbar">
             {options.map((option) => {
@@ -83,17 +83,17 @@ export function CustomSelect({
                     onChange(option.value);
                     setIsOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-xs font-medium text-left cursor-pointer transition-colors ${
                     isSelected
-                      ? "bg-indigo-600/20 text-indigo-300 font-semibold border border-indigo-500/30"
+                      ? "bg-[#A3E635]/15 text-[#A3E635] font-bold border border-[#A3E635]/30"
                       : "text-slate-300 hover:bg-slate-800/80 hover:text-white"
                   }`}
                 >
-                  <div className="flex items-center gap-2 truncate">
-                    {OptionIcon && <OptionIcon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? "text-indigo-400" : "text-slate-400"}`} />}
+                  <div className="flex items-center gap-2.5 truncate">
+                    {OptionIcon && <OptionIcon className={`w-4 h-4 shrink-0 ${isSelected ? "text-[#A3E635]" : "text-slate-400"}`} />}
                     <span className="truncate">{option.label}</span>
                   </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0 ml-2" />}
+                  {isSelected && <Check className="w-4 h-4 text-[#A3E635] shrink-0 ml-2" />}
                 </button>
               );
             })}

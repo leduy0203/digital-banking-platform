@@ -21,7 +21,8 @@ import {
   Sparkles,
   Plus,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
@@ -266,30 +267,55 @@ export default function AccountsPage() {
                           </div>
                         </div>
 
-                        <Badge 
-                          variant="outline" 
-                          className={acc.status === 'ACTIVE' 
-                            ? "border-emerald-800 text-emerald-400 bg-emerald-950/60 text-[10px] px-3 py-1 rounded-full"
-                            : "border-red-800 text-red-400 bg-red-950/60 text-[10px] px-3 py-1 rounded-full"
-                          }
-                        >
-                          {acc.status}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          {acc.isDefault && (
+                            <Badge className="bg-emerald-500/20 text-[#A3E635] border border-emerald-500/40 text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                              Mặc định
+                            </Badge>
+                          )}
+                          <Badge 
+                            variant="outline" 
+                            className={acc.status === 'ACTIVE' 
+                              ? "border-emerald-800 text-emerald-400 bg-emerald-950/60 text-[10px] px-3 py-1 rounded-full"
+                              : "border-red-800 text-red-400 bg-red-950/60 text-[10px] px-3 py-1 rounded-full"
+                            }
+                          >
+                            {acc.status}
+                          </Badge>
+                        </div>
                       </div>
 
                       {/* Balance Container */}
                       <div className="bg-gradient-to-r from-[#1A253D] via-[#162238] to-[#1A253D] border border-slate-700/80 rounded-2xl p-5 flex items-center justify-between">
                         <div>
-                          <span className="text-xs text-slate-400 font-medium">Số dư khả dụng:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-slate-400 font-medium">Số dư khả dụng:</span>
+                            {(acc.frozenBalance ?? 0) > 0 && (
+                              <span className="text-[10px] text-amber-400 font-semibold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/60">
+                                Phong tỏa: {(acc.frozenBalance ?? 0).toLocaleString('vi-VN')} {acc.currency}
+                              </span>
+                            )}
+                          </div>
                           <div className="font-mono font-black text-2xl text-[#A3E635] mt-1">
                             {showBalance 
                               ? `${(acc.availableBalance ?? acc.balance ?? 0).toLocaleString('vi-VN')} ${acc.currency}` 
                               : '•••••••• VND'}
                           </div>
                         </div>
-                        <div className="w-10 h-10 rounded-xl bg-[#0D1527] flex items-center justify-center text-emerald-400 border border-slate-700">
-                          <Wallet className="w-5 h-5" />
-                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await accountApi.getAccountBalance(acc.accountNumber);
+                              if (res?.success && res.data) {
+                                setAccounts(prev => prev.map(a => a.accountNumber === acc.accountNumber ? res.data : a));
+                              }
+                            } catch {}
+                          }}
+                          className="w-10 h-10 rounded-xl bg-[#0D1527] hover:bg-[#141C2E] flex items-center justify-center text-emerald-400 hover:text-[#A3E635] border border-slate-700 transition-all cursor-pointer shadow-md group"
+                          title="Làm mới số dư tài khoản này"
+                        >
+                          <RefreshCw className="w-4 h-4 group-hover:rotate-180 transition-transform duration-300" />
+                        </button>
                       </div>
 
                       {/* Account Quick Action Buttons */}

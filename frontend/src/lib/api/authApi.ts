@@ -109,6 +109,14 @@ export const authApi = {
   },
 
   /**
+   * POST /users/change-password
+   */
+  async changePassword(payload: { currentPassword: string; newPassword: string; confirmPassword: string }): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.post<{ success: boolean; message: string }>('/users/change-password', payload);
+    return res.data;
+  },
+
+  /**
    * POST /auth/logout
    */
   async logout(refreshToken?: string): Promise<void> {

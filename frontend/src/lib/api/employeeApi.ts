@@ -255,11 +255,36 @@ export const employeeApi = {
   },
 
   /**
+   * Mở tài khoản thanh toán mới tại quầy (POST /api/v1/employee/accounts/open)
+   */
+  async openAccount(payload: {
+    customerId: string;
+    accountType?: 'CHECKING' | 'SAVINGS';
+    currency?: string;
+    initialDeposit?: number;
+  }): Promise<{ success: boolean; data: any; message: string }> {
+    const res = await apiClient.post<{ success: boolean; data: any; message: string }>("/employee/accounts/open", payload);
+    return res.data;
+  },
+
+  /**
+   * Cập nhật trạng thái tài khoản (PATCH /api/v1/employee/accounts/{accountNumber}/status?status=...)
+   */
+  async updateAccountStatus(accountNumber: string, status: 'ACTIVE' | 'FROZEN' | 'BLOCKED' | 'CLOSED'): Promise<{ success: boolean; data: any; message: string }> {
+    const res = await apiClient.patch<{ success: boolean; data: any; message: string }>(`/employee/accounts/${accountNumber}/status`, null, {
+      params: { status }
+    });
+    return res.data;
+  },
+
+  /**
    * Khóa / Phong tỏa tài khoản
    */
   async freezeAccount(payload: FreezeAccountPayload): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await apiClient.post<{ success: boolean; message: string }>("/employee/accounts/freeze", payload);
+      const res = await apiClient.patch<{ success: boolean; message: string }>(`/employee/accounts/${payload.accountNumber}/status`, null, {
+        params: { status: payload.lockType }
+      });
       return res.data;
     } catch {
       localAccountsList = localAccountsList.map(a => 
@@ -273,7 +298,7 @@ export const employeeApi = {
             } 
           : a
       );
-      return { success: true, message: `Đã phong tỏa tài khoản ${payload.accountNumber} thành công` };
+      return { success: true, message: `Đã cập nhật trạng thái tài khoản ${payload.accountNumber} thành công` };
     }
   },
 
@@ -282,12 +307,14 @@ export const employeeApi = {
    */
   async unfreezeAccount(accountNumber: string): Promise<{ success: boolean; message: string }> {
     try {
-      const res = await apiClient.post<{ success: boolean; message: string }>(`/employee/accounts/${accountNumber}/unfreeze`);
+      const res = await apiClient.patch<{ success: boolean; message: string }>(`/employee/accounts/${accountNumber}/status`, null, {
+        params: { status: 'ACTIVE' }
+      });
       return res.data;
     } catch {
       localAccountsList = localAccountsList.map(a => 
         a.accountNumber === accountNumber 
-          ? { ...a, status: "ACTIVE", frozenReason: undefined, refCode: undefined, updatedAt: new Date().toLocaleString() } 
+          ? { ...a, status: 'ACTIVE', frozenReason: undefined, refCode: undefined, updatedAt: new Date().toLocaleString() } 
           : a
       );
       return { success: true, message: `Đã mở khóa tài khoản ${accountNumber} thành công` };
