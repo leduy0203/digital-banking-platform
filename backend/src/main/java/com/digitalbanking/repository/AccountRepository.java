@@ -32,4 +32,6 @@ public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
     );
 
     List<AccountEntity> findByCustomerUserId(UUID currentUserId);
+
+    long countByCustomerIdAndAccountType(UUID id, AccountType accountType);
 }

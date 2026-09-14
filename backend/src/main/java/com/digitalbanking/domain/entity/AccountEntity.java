@@ -45,6 +45,10 @@ public class AccountEntity extends BaseEntity {
     @Builder.Default
     private AccountStatus status = AccountStatus.ACTIVE;
 
+    @Column(name = "is_default", nullable = false)
+    @Builder.Default
+    private Boolean isDefault = false;
+
     @Column(name = "opened_at", nullable = false)
     @Builder.Default
     private Instant openedAt = Instant.now();

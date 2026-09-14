@@ -9,6 +9,7 @@ import com.digitalbanking.service.EmployeeKycService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -22,6 +23,7 @@ public class EmployeeKycController {
     private final EmployeeKycService employeeKycService;
 
     @GetMapping("/pending")
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
     public ApiResponse<PageResponse<KycDocumentResponse>> getPendingKycs(
             @Valid KycFilterRequest filterRequest) {
 
@@ -33,6 +35,7 @@ public class EmployeeKycController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
     public ApiResponse<KycDocumentResponse> getKycDetail(@PathVariable UUID id) {
 
         log.info("Fetching KYC detail for ID: {}", id);
@@ -43,6 +46,7 @@ public class EmployeeKycController {
     }
 
     @PutMapping("/{id}/approve")
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
     public ApiResponse<KycDocumentResponse> approveKyc(@PathVariable UUID id) {
 
         log.info("Approving KYC document ID: {}", id);
@@ -53,6 +57,7 @@ public class EmployeeKycController {
     }
 
     @PutMapping("/{id}/reject")
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
     public ApiResponse<KycDocumentResponse> rejectKyc(
             @PathVariable UUID id,
             @Valid @RequestBody RejectKycRequest request) {

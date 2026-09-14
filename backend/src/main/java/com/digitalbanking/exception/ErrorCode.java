@@ -23,7 +23,7 @@ public enum ErrorCode {
     REFRESH_TOKEN_INVALID("AUTH_005", "Refresh token is invalid or expired", HttpStatus.UNAUTHORIZED),
     REFRESH_TOKEN_REVOKED("AUTH_006", "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
     PASSWORD_NOT_MATCH("AUTH_007", "Confirm password does not match", HttpStatus.BAD_REQUEST),
-
+    INVALID_CURRENT_PASSWORD("AUTH_008", "Invalid current password", HttpStatus.BAD_REQUEST),
 
     // 3. USER & CUSTOMER
 
@@ -46,6 +46,7 @@ public enum ErrorCode {
     ACCOUNT_NOT_FOUND("ACC_001", "Bank account not found", HttpStatus.NOT_FOUND),
     ACCOUNT_LOCKED("ACC_002", "Bank account is frozen or closed", HttpStatus.BAD_REQUEST),
     INSUFFICIENT_FUNDS("ACC_003", "Insufficient available balance", HttpStatus.BAD_REQUEST),
+    MAX_ACCOUNT_LIMIT_REACHED("ACC_004", "Maximum number of accounts reached for this customer", HttpStatus.BAD_REQUEST),
 
     // 5. TRANSACTION & TRANSFER
 

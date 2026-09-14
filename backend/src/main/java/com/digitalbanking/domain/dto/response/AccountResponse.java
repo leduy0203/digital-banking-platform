@@ -23,6 +23,7 @@ public class AccountResponse {
     private String currency;
     private AccountType accountType;
     private AccountStatus status;
+    private Boolean isDefault;
     private Instant openedAt;
     private Instant closedAt;
 }

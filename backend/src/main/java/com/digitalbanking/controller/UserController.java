@@ -1,14 +1,14 @@
 package com.digitalbanking.controller;
 
+import com.digitalbanking.domain.dto.request.ChangePasswordRequest;
 import com.digitalbanking.domain.dto.response.ApiResponse;
 import com.digitalbanking.domain.dto.response.UserMeResponse;
 import com.digitalbanking.security.SecurityUtils;
 import com.digitalbanking.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -31,5 +31,15 @@ public class UserController {
         UserMeResponse response = userService.getMyProfile(currentUserId);
 
         return ApiResponse.ok("Fetch user profile successfully", response);
+    }
+
+    @PostMapping("/change-password")
+    public ApiResponse<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        log.info("Change password request for user: {}", currentUserId);
+
+        userService.changePassword(currentUserId, request);
+
+        return ApiResponse.ok("Password changed successfully. Please log in again.");
     }
 }

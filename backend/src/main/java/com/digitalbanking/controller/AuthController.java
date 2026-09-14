@@ -57,13 +57,11 @@ public class AuthController {
 
     @PostMapping("/logout")
     public ApiResponse<Void> logout(
-            @RequestBody(required = false) RefreshTokenRequest request
+            @Valid @RequestBody RefreshTokenRequest request
     ) {
         log.info("Logout attempt for refresh token: {}", request.getRefreshToken());
 
-        if (request.getRefreshToken() != null) {
-            authService.logout(request.getRefreshToken());
-        }
+        authService.logout(request.getRefreshToken());
         return ApiResponse.ok("Logged out successfully");
     }
 
