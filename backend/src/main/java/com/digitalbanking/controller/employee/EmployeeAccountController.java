@@ -1,8 +1,11 @@
 package com.digitalbanking.controller.employee;
 
+import com.digitalbanking.domain.dto.request.filter.EmployeeAccountFilterRequest;
 import com.digitalbanking.domain.dto.request.OpenAccountRequest;
 import com.digitalbanking.domain.dto.response.AccountResponse;
 import com.digitalbanking.domain.dto.response.ApiResponse;
+import com.digitalbanking.domain.dto.response.EmployeeAccountResponse;
+import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.enums.AccountStatus;
 import com.digitalbanking.service.AccountService;
 import jakarta.validation.Valid;
@@ -18,6 +21,18 @@ import org.springframework.web.bind.annotation.*;
 public class EmployeeAccountController {
 
     private final AccountService accountService;
+
+    @GetMapping
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
+    public ApiResponse<PageResponse<EmployeeAccountResponse>> getAccounts(
+            @Valid EmployeeAccountFilterRequest filterRequest
+    ) {
+        log.info("Get accounts request for employee: {}", filterRequest);
+
+        PageResponse<EmployeeAccountResponse> response = accountService.getAccountsForEmployee(filterRequest);
+
+        return ApiResponse.ok("Employee accounts retrieved successfully", response);
+    }
 
     @PostMapping("/open")
     @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
@@ -41,4 +56,6 @@ public class EmployeeAccountController {
 
         return ApiResponse.ok("Account status updated successfully" , response);
     }
+
+
 }

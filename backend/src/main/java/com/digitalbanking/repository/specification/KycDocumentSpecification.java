@@ -1,6 +1,6 @@
 package com.digitalbanking.repository.specification;
 
-import com.digitalbanking.domain.dto.request.KycFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.KycFilterRequest;
 import com.digitalbanking.domain.entity.CustomerEntity;
 import com.digitalbanking.domain.entity.KycDocumentEntity;
 import com.digitalbanking.domain.entity.UserEntity;

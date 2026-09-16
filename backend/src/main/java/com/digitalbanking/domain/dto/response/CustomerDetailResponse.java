@@ -7,26 +7,37 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
 @Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CustomerResponse {
-    private UUID id;
+@Builder
+public class CustomerDetailResponse {
+
+    private UUID customerId;
+    private UUID userId;
     private String customerCode;
     private String fullName;
     private String nationalId;
     private LocalDate dateOfBirth;
     private String address;
+    private String avatarUrl;
     private String email;
     private String phoneNumber;
     private UserStatus userStatus;
-    private String avatarUrl;
+
     private KycStatus kycStatus;
-    private String defaultAccountNumber;
-    private BigDecimal defaultBalance;
+    private Instant kycSubmittedAt;
+    private Instant kycVerifiedAt;
+
+    private BigDecimal totalBalance;
+    private int totalAccounts;
+
+    private List<CustomerAccountSummaryDto> accounts;
+
     private Instant createdAt;
+    private Instant updatedAt;
 }

@@ -1,7 +1,7 @@
 package com.digitalbanking.service.impl;
 
 import com.digitalbanking.domain.dto.request.CreateEmployeeRequest;
-import com.digitalbanking.domain.dto.request.EmployeeFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.EmployeeFilterRequest;
 import com.digitalbanking.domain.dto.response.EmployeeProfileResponse;
 import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.entity.EmployeeEntity;
@@ -20,17 +20,13 @@ import com.digitalbanking.service.TokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -91,34 +87,11 @@ public class AdminEmployeeServiceImpl implements AdminEmployeeService {
         log.info("Fetching employees list with filter: {}", filterRequest);
 
         Specification<EmployeeEntity> spec = EmployeeSpecification.filter(filterRequest);
+        Pageable pageable = filterRequest.toPageable();
 
-        Sort.Direction direction = "DESC".equalsIgnoreCase(filterRequest.getSortDir())
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-
-        String sortBy = StringUtils.hasText(filterRequest.getSortBy())
-                ? filterRequest.getSortBy()
-                : "createdAt";
-
-        Pageable pageable = PageRequest.of(
-                filterRequest.getPage(),
-                filterRequest.getSize(),
-                Sort.by(direction, sortBy)
-        );
         Page<EmployeeEntity> pageData = employeeRepository.findAll(spec, pageable);
 
-        List<EmployeeProfileResponse> items = pageData.getContent().stream()
-                .map(this::mapToEmployeeProfileResponse)
-                .toList();
-
-        return PageResponse.<EmployeeProfileResponse>builder()
-                .items(items)
-                .page(pageData.getNumber() + 1)
-                .size(pageData.getSize())
-                .totalElements(pageData.getTotalElements())
-                .totalPages(pageData.getTotalPages())
-                .isLast(pageData.isLast())
-                .build();
+        return PageResponse.from(pageData.map(this::mapToEmployeeProfileResponse));
     }
 
     @Override

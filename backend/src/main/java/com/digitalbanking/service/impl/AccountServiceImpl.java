@@ -1,19 +1,26 @@
 package com.digitalbanking.service.impl;
 
+import com.digitalbanking.domain.dto.request.filter.EmployeeAccountFilterRequest;
 import com.digitalbanking.domain.dto.request.OpenAccountRequest;
 import com.digitalbanking.domain.dto.response.AccountLookupResponse;
 import com.digitalbanking.domain.dto.response.AccountResponse;
+import com.digitalbanking.domain.dto.response.EmployeeAccountResponse;
+import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.entity.AccountEntity;
 import com.digitalbanking.domain.entity.CustomerEntity;
+import com.digitalbanking.domain.entity.UserEntity;
 import com.digitalbanking.domain.enums.AccountStatus;
 import com.digitalbanking.domain.enums.AccountType;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
 import com.digitalbanking.repository.AccountRepository;
 import com.digitalbanking.repository.CustomerRepository;
+import com.digitalbanking.repository.specification.AccountSpecification;
 import com.digitalbanking.service.AccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -129,6 +136,23 @@ public class AccountServiceImpl implements AccountService {
         return mapToAccountResponse(account);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<EmployeeAccountResponse> getAccountsForEmployee(
+            EmployeeAccountFilterRequest filterRequest
+    ) {
+        log.info("Fetching accounts for employee with filter: {}", filterRequest);
+
+        Pageable pageable = filterRequest.toPageable();
+
+        Page<AccountEntity> pageResult = accountRepository.findAll(
+                AccountSpecification.filter(filterRequest),
+                pageable
+        );
+
+        return PageResponse.from(pageResult.map(this::mapToEmployeeAccountResponse));
+    }
+
     private String generateUniqueAccountNumber() {
         String accountNumber;
         do {
@@ -162,6 +186,35 @@ public class AccountServiceImpl implements AccountService {
                 .isDefault(Boolean.TRUE.equals(account.getIsDefault()))
                 .openedAt(account.getOpenedAt())
                 .closedAt(account.getClosedAt())
+                .build();
+    }
+
+    private EmployeeAccountResponse mapToEmployeeAccountResponse(AccountEntity account) {
+        BigDecimal availableBal = account.getAvailableBalance() != null
+                ? account.getAvailableBalance()
+                : account.getBalance().subtract(account.getFrozenBalance() != null ? account.getFrozenBalance() : BigDecimal.ZERO);
+
+        CustomerEntity customer = account.getCustomer();
+        UserEntity user = customer != null ? customer.getUser() : null;
+
+        return EmployeeAccountResponse.builder()
+                .id(account.getId())
+                .accountNumber(account.getAccountNumber())
+                .cif(customer != null ? customer.getCustomerCode() : null)
+                .customerId(customer != null ? customer.getId() : null)
+                .customerName(customer != null ? customer.getFullName() : null)
+                .customerPhone(user != null ? user.getPhoneNumber() : null)
+                .customerEmail(user != null ? user.getEmail() : null)
+                .accountType(account.getAccountType())
+                .balance(account.getBalance())
+                .frozenBalance(account.getFrozenBalance())
+                .availableBalance(availableBal)
+                .currency(account.getCurrency())
+                .status(account.getStatus())
+                .isDefault(Boolean.TRUE.equals(account.getIsDefault()))
+                .openedAt(account.getOpenedAt())
+                .closedAt(account.getClosedAt())
+                .updatedAt(account.getUpdatedAt())
                 .build();
     }
 }

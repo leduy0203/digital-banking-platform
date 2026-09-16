@@ -17,4 +17,6 @@ public interface KycDocumentRepository extends JpaRepository<KycDocumentEntity, 
     Optional<KycDocumentEntity> findTopByCustomerIdOrderBySubmittedAtDesc(UUID customerId);
 
     Page<KycDocumentEntity> findAllByStatus(KycStatus status, Pageable pageable);
+
+    long countByStatus(KycStatus status);
 }

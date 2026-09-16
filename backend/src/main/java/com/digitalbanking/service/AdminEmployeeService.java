@@ -1,7 +1,7 @@
 package com.digitalbanking.service;
 
 import com.digitalbanking.domain.dto.request.CreateEmployeeRequest;
-import com.digitalbanking.domain.dto.request.EmployeeFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.EmployeeFilterRequest;
 import com.digitalbanking.domain.dto.response.EmployeeProfileResponse;
 import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.enums.UserStatus;

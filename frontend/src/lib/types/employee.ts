@@ -55,8 +55,46 @@ export interface CustomerAccount {
   accountNumber: string;
   accountType: "CHECKING" | "SAVINGS";
   balance: number;
+  frozenBalance?: number;
+  availableBalance?: number;
   currency: string;
-  status: "ACTIVE" | "FROZEN" | "DEBIT_LOCKED";
+  status: "ACTIVE" | "FROZEN" | "CLOSED" | "DEBIT_LOCKED";
+  isDefault?: boolean;
+  openedAt?: string;
+}
+
+export interface CustomerSummaryItem {
+  id: string;
+  customerCode: string;
+  fullName: string;
+  nationalId: string;
+  phoneNumber?: string;
+  email?: string;
+  avatarUrl?: string;
+  userStatus?: "ACTIVE" | "BLOCKED";
+  kycStatus: "VERIFIED" | "PENDING" | "REJECTED" | "NOT_SUBMITTED";
+  createdAt: string;
+}
+
+export interface CustomerDetailView {
+  customerId: string;
+  customerCode: string;
+  fullName: string;
+  nationalId: string;
+  dateOfBirth?: string;
+  address?: string;
+  avatarUrl?: string;
+  email?: string;
+  phoneNumber?: string;
+  userStatus?: "ACTIVE" | "BLOCKED";
+  kycStatus: "VERIFIED" | "PENDING" | "REJECTED" | "NOT_SUBMITTED";
+  kycSubmittedAt?: string;
+  kycVerifiedAt?: string;
+  totalBalance: number;
+  totalAccounts: number;
+  accounts: CustomerAccount[];
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Customer360 {
@@ -65,22 +103,43 @@ export interface Customer360 {
   phone: string;
   email: string;
   idNumber: string;
+  avatarUrl?: string;
   registeredDate: string;
-  kycStatus: "VERIFIED" | "PENDING" | "REJECTED";
+  kycStatus: "VERIFIED" | "PENDING" | "REJECTED" | "NOT_SUBMITTED";
   address: string;
   accounts: CustomerAccount[];
 }
 
 export interface AccountItem {
+  id?: string;
   accountNumber: string;
   cif: string;
+  customerId?: string;
   customerName: string;
+  customerPhone?: string;
+  customerEmail?: string;
   accountType: "CHECKING" | "SAVINGS";
   balance: number;
-  status: "ACTIVE" | "FROZEN" | "DEBIT_LOCKED";
+  frozenBalance?: number;
+  availableBalance?: number;
+  currency?: string;
+  status: "ACTIVE" | "FROZEN" | "BLOCKED" | "CLOSED" | "DEBIT_LOCKED";
+  isDefault?: boolean;
+  openedAt?: string;
+  closedAt?: string | null;
   frozenReason?: string;
   refCode?: string;
   updatedAt: string;
+}
+
+export interface AccountFilterPayload {
+  keyword?: string;
+  status?: string;
+  accountType?: string;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDir?: 'ASC' | 'DESC';
 }
 
 export interface FreezeAccountPayload {

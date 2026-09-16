@@ -1,6 +1,6 @@
 package com.digitalbanking.controller.employee;
 
-import com.digitalbanking.domain.dto.request.KycFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.KycFilterRequest;
 import com.digitalbanking.domain.dto.request.RejectKycRequest;
 import com.digitalbanking.domain.dto.response.ApiResponse;
 import com.digitalbanking.domain.dto.response.KycDocumentResponse;
@@ -32,6 +32,16 @@ public class EmployeeKycController {
         PageResponse<KycDocumentResponse> response = employeeKycService.getPendingKycs(filterRequest);
 
         return ApiResponse.ok("Pending KYC documents retrieved successfully", response);
+    }
+
+    @GetMapping("/count-pending")
+    @PreAuthorize("hasAnyRole('TELLER', 'ADMIN')")
+    public ApiResponse<Long> countPendingKycs() {
+        log.info("Fetching count of pending KYC documents");
+
+        long count = employeeKycService.countPendingKycs();
+
+        return ApiResponse.ok("Pending KYC count retrieved successfully", count);
     }
 
     @GetMapping("/{id}")

@@ -64,13 +64,13 @@ export function EmployeeSidebar() {
   useEffect(() => {
     async function loadSidebarData() {
       try {
-        const [kycData, profileData] = await Promise.allSettled([
-          employeeApi.getPendingKycs({ status: "PENDING" }),
+        const [kycCountResult, profileData] = await Promise.allSettled([
+          employeeApi.getPendingKycCount(),
           employeeApi.getMyProfile(),
         ]);
 
-        if (kycData.status === "fulfilled") {
-          setPendingCount(kycData.value.totalElements);
+        if (kycCountResult.status === "fulfilled") {
+          setPendingCount(kycCountResult.value);
         }
         if (profileData.status === "fulfilled") {
           setProfile(profileData.value);

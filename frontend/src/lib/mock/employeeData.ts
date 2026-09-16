@@ -76,6 +76,7 @@ export const mockCustomersList: Customer360[] = [
     phone: "0908123456",
     email: "bichngoc.tran@gmail.com",
     idNumber: "079201998812",
+    avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&auto=format&fit=crop&q=80",
     registeredDate: "15/01/2024",
     kycStatus: "VERIFIED",
     address: "124 Nguyễn Thị Minh Khai, Phường 6, Quận 3, TP. Hồ Chí Minh",
@@ -90,6 +91,7 @@ export const mockCustomersList: Customer360[] = [
     phone: "0912345678",
     email: "hung.levan@yahoo.com",
     idNumber: "031092883491",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80",
     registeredDate: "10/03/2024",
     kycStatus: "PENDING",
     address: "45 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
@@ -103,12 +105,25 @@ export const mockCustomersList: Customer360[] = [
     phone: "0987654321",
     email: "hoangnam.pham@outlook.com",
     idNumber: "001095001293",
+    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80",
     registeredDate: "05/06/2025",
     kycStatus: "VERIFIED",
     address: "88 Trần Hưng Đạo, Phường Phạm Ngũ Lão, Quận 1, TP. Hồ Chí Minh",
     accounts: [
       { accountNumber: "1039485762", accountType: "CHECKING", balance: 12500000, currency: "VND", status: "FROZEN" }
     ]
+  },
+  {
+    cif: "CIF-90127",
+    fullName: "Võ Thị Mỹ Duyên",
+    phone: "0934567890",
+    email: "myduyen.vo@gmail.com",
+    idNumber: "079302881923",
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80",
+    registeredDate: "12/08/2025",
+    kycStatus: "REJECTED",
+    address: "12 Lý Thường Kiệt, Quận 10, TP. Hồ Chí Minh",
+    accounts: []
   }
 ];
 

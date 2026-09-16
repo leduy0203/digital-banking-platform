@@ -1,6 +1,6 @@
 package com.digitalbanking.service.impl;
 
-import com.digitalbanking.domain.dto.request.KycFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.KycFilterRequest;
 import com.digitalbanking.domain.dto.request.RejectKycRequest;
 import com.digitalbanking.domain.dto.response.KycDocumentResponse;
 import com.digitalbanking.domain.dto.response.PageResponse;
@@ -20,16 +20,13 @@ import com.digitalbanking.service.EmployeeKycService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -48,35 +45,16 @@ public class EmployeeKycServiceImpl implements EmployeeKycService {
         log.info("Fetching pending KYC documents with filter: {}", filterRequest);
 
         Specification<KycDocumentEntity> spec = KycDocumentSpecification.filter(filterRequest);
-
-        Sort.Direction direction = "DESC".equalsIgnoreCase(filterRequest.getSortDir())
-                ? Sort.Direction.DESC
-                : Sort.Direction.ASC;
-
-        String sortBy = StringUtils.hasText(filterRequest.getSortBy())
-                ? filterRequest.getSortBy()
-                : "submittedAt";
-
-        Pageable pageable = PageRequest.of(
-                filterRequest.getPage(),
-                filterRequest.getSize(),
-                Sort.by(direction, sortBy)
-        );
+        Pageable pageable = filterRequest.toPageable("submittedAt");
 
         Page<KycDocumentEntity> kycPage = kycDocumentRepository.findAll(spec, pageable);
 
-        List<KycDocumentResponse> content = kycPage.getContent().stream()
-                .map(this::mapToKycDocumentResponse)
-                .toList();
+        return PageResponse.from(kycPage.map(this::mapToKycDocumentResponse));
+    }
 
-        return PageResponse.<KycDocumentResponse>builder()
-                .items(content)
-                .page(kycPage.getNumber() + 1)
-                .size(kycPage.getSize())
-                .totalElements(kycPage.getTotalElements())
-                .totalPages(kycPage.getTotalPages())
-                .isLast(kycPage.isLast())
-                .build();
+    @Override
+    public long countPendingKycs() {
+        return kycDocumentRepository.countByStatus(KycStatus.PENDING);
     }
 
     @Override

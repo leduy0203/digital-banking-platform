@@ -1,6 +1,6 @@
 package com.digitalbanking.repository.specification;
 
-import com.digitalbanking.domain.dto.request.EmployeeFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.EmployeeFilterRequest;
 import com.digitalbanking.domain.entity.EmployeeEntity;
 import com.digitalbanking.domain.entity.UserEntity;
 import jakarta.persistence.criteria.Join;

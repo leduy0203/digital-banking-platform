@@ -1,7 +1,7 @@
 package com.digitalbanking.controller.admin;
 
 import com.digitalbanking.domain.dto.request.CreateEmployeeRequest;
-import com.digitalbanking.domain.dto.request.EmployeeFilterRequest;
+import com.digitalbanking.domain.dto.request.filter.EmployeeFilterRequest;
 import com.digitalbanking.domain.dto.response.ApiResponse;
 import com.digitalbanking.domain.dto.response.EmployeeProfileResponse;
 import com.digitalbanking.domain.dto.response.PageResponse;

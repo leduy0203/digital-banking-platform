@@ -1,8 +1,11 @@
 package com.digitalbanking.service;
 
+import com.digitalbanking.domain.dto.request.filter.EmployeeAccountFilterRequest;
 import com.digitalbanking.domain.dto.request.OpenAccountRequest;
 import com.digitalbanking.domain.dto.response.AccountLookupResponse;
 import com.digitalbanking.domain.dto.response.AccountResponse;
+import com.digitalbanking.domain.dto.response.EmployeeAccountResponse;
+import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.enums.AccountStatus;
 
 import java.util.List;
@@ -21,4 +24,6 @@ public interface AccountService {
     AccountResponse openAccount(OpenAccountRequest request);
 
     AccountResponse updateAccountStatus(String accountNumber, AccountStatus status);
+
+    PageResponse<EmployeeAccountResponse> getAccountsForEmployee(EmployeeAccountFilterRequest filterRequest);
 }

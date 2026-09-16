@@ -4,6 +4,8 @@ import {
   KycDocumentResponse,
   KycFilterPayload,
   Customer360, 
+  CustomerSummaryItem,
+  CustomerDetailView,
   AccountItem, 
   FreezeAccountPayload, 
   CashOpPayload, 
@@ -93,6 +95,18 @@ export const employeeApi = {
       }));
     } catch {
       return localKycList;
+    }
+  },
+
+  /**
+   * Lấy số lượng hồ sơ eKYC đang chờ duyệt (GET /api/v1/employee/kyc/count-pending)
+   */
+  async getPendingKycCount(): Promise<number> {
+    try {
+      const res = await apiClient.get<{ data: number }>("/employee/kyc/count-pending");
+      return res.data.data ?? 0;
+    } catch {
+      return 0;
     }
   },
 
@@ -206,12 +220,81 @@ export const employeeApi = {
   },
 
   /**
-   * Tra cứu danh sách Khách hàng (Customer 360)
+   * Tra cứu danh sách Khách hàng phân trang (GET /api/v1/employee/customers)
+   */
+  async getCustomersPage(params?: {
+    keyword?: string;
+    kycStatus?: string;
+    status?: string;
+    page?: number;
+    size?: number;
+    sortBy?: string;
+    sortDir?: 'ASC' | 'DESC';
+  }): Promise<PageResponse<CustomerSummaryItem>> {
+    try {
+      const res = await apiClient.get<{ data: PageResponse<any> }>("/employee/customers", { params });
+      return res.data.data;
+    } catch {
+      // Mock fallback
+      const filtered = mockCustomersList.filter(c => {
+        if (params?.keyword) {
+          const q = params.keyword.toLowerCase();
+          const match = c.fullName.toLowerCase().includes(q) || c.cif.toLowerCase().includes(q) || c.phone.includes(q) || c.idNumber.includes(q);
+          if (!match) return false;
+        }
+        if (params?.kycStatus && params.kycStatus !== 'ALL') {
+          if (c.kycStatus !== params.kycStatus) return false;
+        }
+        return true;
+      });
+
+      return {
+        items: filtered.map(c => ({
+          id: c.cif,
+          customerCode: c.cif,
+          fullName: c.fullName,
+          nationalId: c.idNumber,
+          phoneNumber: c.phone,
+          email: c.email,
+          avatarUrl: c.avatarUrl,
+          userStatus: "ACTIVE",
+          kycStatus: c.kycStatus as any,
+          createdAt: new Date().toISOString()
+        })),
+        page: params?.page || 0,
+        size: params?.size || 10,
+        totalElements: filtered.length,
+        totalPages: Math.ceil(filtered.length / (params?.size || 10)),
+        isLast: (params?.page || 0) >= Math.ceil(filtered.length / (params?.size || 10)) - 1
+      };
+    }
+  },
+
+  /**
+   * Tra cứu danh sách Khách hàng (Customer 360 Legacy/Compat)
    */
   async getCustomers(query?: string): Promise<Customer360[]> {
     try {
-      const res = await apiClient.get<{ data: Customer360[] }>("/employee/customers", { params: { query } });
-      return res.data.data;
+      const res = await apiClient.get<{ data: PageResponse<any> | any[] }>("/employee/customers", { params: { keyword: query, size: 50 } });
+      const rawData = res.data.data;
+      const items = Array.isArray(rawData) ? rawData : (rawData?.items || []);
+      return items.map((c: any) => ({
+        cif: c.customerCode || c.cif,
+        fullName: c.fullName,
+        phone: c.phoneNumber || c.phone || "",
+        email: c.email || "",
+        idNumber: c.nationalId || c.idNumber || "",
+        registeredDate: c.createdAt ? new Date(c.createdAt).toLocaleDateString("vi-VN") : "",
+        kycStatus: c.kycStatus === "APPROVED" ? "VERIFIED" : (c.kycStatus || "PENDING"),
+        address: c.address || "",
+        accounts: c.accounts || (c.defaultAccountNumber ? [{
+          accountNumber: c.defaultAccountNumber,
+          accountType: "CHECKING",
+          balance: Number(c.defaultBalance || 0),
+          currency: "VND",
+          status: "ACTIVE"
+        }] : [])
+      }));
     } catch {
       if (!query) return mockCustomersList;
       const q = query.toLowerCase();
@@ -225,32 +308,177 @@ export const employeeApi = {
   },
 
   /**
-   * Lấy thông tin hồ sơ 360° theo Mã CIF
+   * Lấy chi tiết toàn diện Customer Detail theo Mã CIF (GET /api/v1/employee/customers/{cif})
    */
-  async getCustomerByCif(cif: string): Promise<Customer360 | null> {
+  async getCustomerDetail(cif: string): Promise<CustomerDetailView | null> {
     try {
-      const res = await apiClient.get<{ data: Customer360 }>(`/employee/customers/${cif}`);
-      return res.data.data;
+      const res = await apiClient.get<{ data: any }>(`/employee/customers/${cif}`);
+      const c = res.data.data;
+      if (!c) return null;
+      return {
+        customerId: c.customerId || c.id,
+        customerCode: c.customerCode || c.cif,
+        fullName: c.fullName,
+        nationalId: c.nationalId || c.idNumber || "",
+        dateOfBirth: c.dateOfBirth,
+        address: c.address || "",
+        avatarUrl: c.avatarUrl,
+        email: c.email || "",
+        phoneNumber: c.phoneNumber || c.phone || "",
+        userStatus: c.userStatus || "ACTIVE",
+        kycStatus: c.kycStatus === "APPROVED" ? "VERIFIED" : (c.kycStatus || "PENDING"),
+        kycSubmittedAt: c.kycSubmittedAt,
+        kycVerifiedAt: c.kycVerifiedAt,
+        totalBalance: Number(c.totalBalance || 0),
+        totalAccounts: Number(c.totalAccounts || (c.accounts ? c.accounts.length : 0)),
+        accounts: (c.accounts || []).map((acc: any) => ({
+          accountNumber: acc.accountNumber,
+          accountType: acc.accountType,
+          balance: Number(acc.balance || 0),
+          frozenBalance: Number(acc.frozenBalance || 0),
+          availableBalance: Number(acc.availableBalance ?? acc.balance ?? 0),
+          currency: acc.currency || "VND",
+          status: acc.status || "ACTIVE",
+          isDefault: acc.isDefault || false,
+          openedAt: acc.openedAt
+        })),
+        createdAt: c.createdAt || new Date().toISOString(),
+        updatedAt: c.updatedAt
+      };
     } catch {
-      return mockCustomersList.find(c => c.cif === cif) || mockCustomersList[0];
+      const fallback = mockCustomersList.find(c => c.cif === cif) || mockCustomersList[0];
+      if (!fallback) return null;
+      const totalBalance = fallback.accounts.reduce((acc, curr) => acc + curr.balance, 0);
+      return {
+        customerId: fallback.cif,
+        customerCode: fallback.cif,
+        fullName: fallback.fullName,
+        nationalId: fallback.idNumber,
+        address: fallback.address,
+        email: fallback.email,
+        phoneNumber: fallback.phone,
+        userStatus: "ACTIVE",
+        kycStatus: fallback.kycStatus as any,
+        totalBalance: totalBalance,
+        totalAccounts: fallback.accounts.length,
+        accounts: fallback.accounts.map(acc => ({
+          accountNumber: acc.accountNumber,
+          accountType: acc.accountType,
+          balance: acc.balance,
+          frozenBalance: 0,
+          availableBalance: acc.balance,
+          currency: acc.currency,
+          status: acc.status as any,
+          isDefault: false
+        })),
+        createdAt: new Date().toISOString()
+      };
     }
   },
 
   /**
-   * Lấy danh sách Tài khoản quản lý
+   * Lấy thông tin hồ sơ 360° theo Mã CIF (Legacy alias)
    */
-  async getAccounts(query?: string): Promise<AccountItem[]> {
+  async getCustomerByCif(cif: string): Promise<Customer360 | null> {
+    const detail = await this.getCustomerDetail(cif);
+    if (!detail) return null;
+    return {
+      cif: detail.customerCode,
+      fullName: detail.fullName,
+      phone: detail.phoneNumber || "",
+      email: detail.email || "",
+      idNumber: detail.nationalId,
+      registeredDate: detail.createdAt ? new Date(detail.createdAt).toLocaleDateString("vi-VN") : "",
+      kycStatus: detail.kycStatus as any,
+      address: detail.address || "",
+      accounts: detail.accounts
+    };
+  },
+
+  /**
+   * Lấy danh sách Tài khoản quản lý (GET /api/v1/employee/accounts)
+   */
+  async getAccounts(filter?: string | {
+    keyword?: string;
+    status?: string;
+    accountType?: string;
+    page?: number;
+    size?: number;
+    sortBy?: string;
+    sortDir?: 'ASC' | 'DESC';
+  }): Promise<PageResponse<AccountItem>> {
+    const params = typeof filter === "string" 
+      ? { keyword: filter, page: 0, size: 20 }
+      : { page: 0, size: 20, ...filter };
+
     try {
-      const res = await apiClient.get<{ data: AccountItem[] }>("/employee/accounts", { params: { query } });
-      return res.data.data;
+      const res = await apiClient.get<{ data: any }>("/employee/accounts", { params });
+      const rawData = res.data.data;
+
+      if (rawData && rawData.items) {
+        return {
+          items: rawData.items.map((a: any) => ({
+            id: a.id,
+            accountNumber: a.accountNumber,
+            cif: a.cif || "",
+            customerId: a.customerId,
+            customerName: a.customerName || "Khách Hàng",
+            customerPhone: a.customerPhone,
+            customerEmail: a.customerEmail,
+            accountType: a.accountType,
+            balance: a.balance ?? 0,
+            frozenBalance: a.frozenBalance ?? 0,
+            availableBalance: a.availableBalance ?? (a.balance - (a.frozenBalance || 0)),
+            currency: a.currency || "VND",
+            status: a.status,
+            isDefault: a.isDefault,
+            openedAt: a.openedAt ? new Date(a.openedAt).toLocaleDateString("vi-VN") : undefined,
+            closedAt: a.closedAt,
+            updatedAt: a.updatedAt ? new Date(a.updatedAt).toLocaleString("vi-VN") : new Date().toLocaleString("vi-VN"),
+          })),
+          page: rawData.page,
+          size: rawData.size,
+          totalElements: rawData.totalElements,
+          totalPages: rawData.totalPages,
+          isLast: rawData.isLast ?? (rawData.page >= rawData.totalPages),
+        };
+      }
+
+      // If backend returned a plain array
+      const itemsList = Array.isArray(rawData) ? rawData : [];
+      return {
+        items: itemsList,
+        page: 1,
+        size: itemsList.length,
+        totalElements: itemsList.length,
+        totalPages: 1,
+        isLast: true,
+      };
     } catch {
-      if (!query) return localAccountsList;
-      const q = query.toLowerCase();
-      return localAccountsList.filter(a => 
-        a.accountNumber.includes(q) || 
-        a.customerName.toLowerCase().includes(q) || 
-        a.cif.toLowerCase().includes(q)
-      );
+      let items = [...localAccountsList];
+      const q = typeof filter === "string" ? filter.toLowerCase() : filter?.keyword?.toLowerCase();
+      if (q) {
+        items = items.filter(a => 
+          a.accountNumber.includes(q) || 
+          a.customerName.toLowerCase().includes(q) || 
+          a.cif.toLowerCase().includes(q)
+        );
+      }
+      if (typeof filter === "object" && filter.status) {
+        items = items.filter(a => a.status === filter.status);
+      }
+      if (typeof filter === "object" && filter.accountType) {
+        items = items.filter(a => a.accountType === filter.accountType);
+      }
+
+      return {
+        items,
+        page: 1,
+        size: items.length,
+        totalElements: items.length,
+        totalPages: 1,
+        isLast: true,
+      };
     }
   },
 
