@@ -8,8 +8,6 @@ import com.digitalbanking.domain.dto.response.PageResponse;
 import com.digitalbanking.domain.entity.AccountEntity;
 import com.digitalbanking.domain.entity.CustomerEntity;
 import com.digitalbanking.domain.entity.KycDocumentEntity;
-import com.digitalbanking.domain.enums.AccountStatus;
-import com.digitalbanking.domain.enums.AccountType;
 import com.digitalbanking.domain.enums.KycStatus;
 import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
@@ -93,6 +91,7 @@ public class EmployeeCustomerServiceImpl implements EmployeeCustomerService {
                 .totalBalance(totalBalance)
                 .totalAccounts(accounts.size())
                 .accounts(accountlist)
+                .hasTransactionPin(customer.getTransactionPinHash() != null)
                 .createdAt(customer.getCreatedAt())
                 .updatedAt(customer.getUpdatedAt())
                 .build();
@@ -112,6 +111,7 @@ public class EmployeeCustomerServiceImpl implements EmployeeCustomerService {
                 .email(customer.getUser() != null ? customer.getUser().getEmail() : null)
                 .userStatus(customer.getUser() != null ? customer.getUser().getStatus() : null)
                 .kycStatus(kycStatus)
+                .hasTransactionPin(customer.getTransactionPinHash() != null)
                 .createdAt(customer.getCreatedAt())
                 .build();
     }

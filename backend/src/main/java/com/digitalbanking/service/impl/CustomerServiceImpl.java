@@ -193,6 +193,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .kycStatus(kycStatus)
                 .defaultAccountNumber(defaultAccount != null ? defaultAccount.getAccountNumber() : null)
                 .defaultBalance(defaultAccount != null ? defaultAccount.getBalance() : BigDecimal.ZERO)
+                .hasTransactionPin(customer.getTransactionPinHash() != null)
                 .createdAt(customer.getCreatedAt())
                 .build();
     }

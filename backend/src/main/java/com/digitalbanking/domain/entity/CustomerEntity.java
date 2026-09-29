@@ -32,6 +32,16 @@ public class CustomerEntity extends BaseEntity {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
+    @Column(name = "transaction_pin_hash")
+    private String transactionPinHash;
+
+    @Column(name = "pin_failed_attempts", nullable = false)
+    @Builder.Default
+    private Integer pinFailedAttempts = 0;
+
+    @Column(name = "pin_locked_until")
+    private java.time.Instant pinLockedUntil;
+
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id" , nullable = false, unique = true)
     private UserEntity user;

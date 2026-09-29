@@ -83,7 +83,13 @@ public enum ErrorCode {
     // KYC
     KYC_DOCUMENT_NOT_FOUND("KYC_001", "KYC document not found", HttpStatus.NOT_FOUND),
     KYC_ALREADY_PROCESSED("KYC_002", "KYC document has already been processed", HttpStatus.BAD_REQUEST),
-    KYC_DOCUMENT_NOT_PENDING("KYC_003", "KYC document is not in PENDING status", HttpStatus.BAD_REQUEST);
+    KYC_DOCUMENT_NOT_PENDING("KYC_003", "KYC document is not in PENDING status", HttpStatus.BAD_REQUEST),
+
+    // 8. TRANSACTION PIN
+    TRANSACTION_PIN_NOT_SET("PIN_001", "Transaction PIN has not been set up yet", HttpStatus.BAD_REQUEST),
+    TRANSACTION_PIN_ALREADY_SETUP("PIN_002", "Transaction PIN is already set up", HttpStatus.BAD_REQUEST),
+    INVALID_TRANSACTION_PIN("PIN_003", "Invalid transaction PIN", HttpStatus.BAD_REQUEST),
+    TRANSACTION_PIN_LOCKED("PIN_004", "Transaction PIN is temporarily locked due to too many failed attempts. Please try again in 15 minutes.", HttpStatus.FORBIDDEN);
 
     private final String code;
     private final String message;

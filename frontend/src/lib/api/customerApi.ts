@@ -21,6 +21,7 @@ export interface CustomerProfile {
   kycStatus: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'NOT_SUBMITTED';
   defaultAccountNumber?: string;
   defaultBalance?: number;
+  hasTransactionPin?: boolean;
   createdAt: string;
 }
 
@@ -34,6 +35,17 @@ export interface CustomerResponse {
 export interface UpdateProfilePayload {
   address?: string;
   avatarUrl?: string;
+}
+
+export interface SetupPinPayload {
+  pin: string;
+  confirmPin: string;
+}
+
+export interface ChangePinPayload {
+  currentPin: string;
+  newPin: string;
+  confirmNewPin: string;
 }
 
 export const customerApi = {
@@ -61,6 +73,24 @@ export const customerApi = {
    */
   async updateProfile(payload: UpdateProfilePayload): Promise<CustomerResponse> {
     const res = await apiClient.put<CustomerResponse>('/customers/me', payload);
+    return res.data;
+  },
+
+  /**
+   * POST /customers/pin/setup
+   * Set up 6-digit transaction PIN for the first time
+   */
+  async setupPin(payload: SetupPinPayload): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.post('/customers/pin/setup', payload);
+    return res.data;
+  },
+
+  /**
+   * PUT /customers/pin/change
+   * Change 6-digit transaction PIN with old PIN
+   */
+  async changePin(payload: ChangePinPayload): Promise<{ success: boolean; message: string }> {
+    const res = await apiClient.put('/customers/pin/change', payload);
     return res.data;
   },
 };

@@ -1,5 +1,6 @@
 package com.digitalbanking.repository.dao;
 
+import com.digitalbanking.domain.enums.TransactionStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -15,35 +16,76 @@ public class TransactionJdbcRepository {
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * [CORE TRANSFER] Cập nhật trạng thái giao dịch sang COMPLETED hoặc FAILED
-     * Kèm thời gian completedAt và cập nhật updated_at = NOW()
+     * [ATOMIC CLAIM] Atomically claims exclusive execution rights for a transaction.
+     * Transitions status: PENDING -> PROCESSING
      *
-     * @param transactionCode Mã giao dịch (TXN...)
-     * @param status          Trạng thái mới (COMPLETED / FAILED)
-     * @param completedAt     Thời điểm hoàn tất
-     * @return boolean true nếu cập nhật thành công
+     * @param transactionCode the transaction code (e.g. TXN...)
+     * @return true if claimed successfully (affected rows == 1), false otherwise
      */
-    // public boolean updateTransactionStatus(String transactionCode, String status, Instant completedAt) {}
+    public boolean markProcessing(String transactionCode) {
+        String sql = """
+                UPDATE transactions
+                SET status = ?
+                WHERE transaction_code = ?
+                  AND status = ?
+                """;
+        int affected = jdbcTemplate.update(
+                sql,
+                TransactionStatus.PROCESSING.name(),
+                transactionCode,
+                TransactionStatus.PENDING.name()
+        );
+        return affected == 1;
+    }
 
     /**
-     * [TRANSACTION HISTORY] Tra cứu lịch sử giao dịch theo số tài khoản với bộ lọc linh hoạt (Dynamic SQL)
-     * Lấy các giao dịch mà tài khoản là nguồn (tiền ra) HOẶC đích (tiền vào) và trạng thái là COMPLETED.
+     * [MARK COMPLETED] Marks a transaction as successfully completed.
+     * Transitions status: PROCESSING -> COMPLETED
      *
-     * @param accountNumber Số tài khoản cần xem
-     * @param fromDate      Từ ngày (tùy chọn)
-     * @param toDate        Đến ngày (tùy chọn)
-     * @param type          Loại giao dịch TRANSFER, DEPOSIT, WITHDRAWAL (tùy chọn)
-     * @param limit         Số bản ghi mỗi trang (Page size)
-     * @param offset        Vị trí bắt đầu (Page index * size)
+     * @param transactionCode the transaction code
+     * @param completedAt     timestamp of completion
+     * @return true if marked completed successfully, false otherwise
      */
-    // public List<TransactionHistoryDto> findTransactionsWithFilter(String accountNumber, Instant fromDate, Instant toDate, String type, int limit, int offset) {}
+    public boolean markCompleted(String transactionCode, Instant completedAt) {
+        String sql = """
+                UPDATE transactions
+                SET status = ?,
+                    completed_at = ?
+                WHERE transaction_code = ?
+                  AND status = ?
+                """;
+        int affected = jdbcTemplate.update(
+                sql,
+                TransactionStatus.COMPLETED.name(),
+                completedAt,
+                transactionCode,
+                TransactionStatus.PROCESSING.name()
+        );
+        return affected == 1;
+    }
 
     /**
-     * [ADMIN REPORT] Thống kê tổng quan giao dịch (SUM, COUNT, GROUP BY theo ngày và loại giao dịch)
+     * [MARK FAILED] Marks a transaction as failed or expired.
+     * Transitions status: PROCESSING -> FAILED
      *
-     * @param fromDate Từ ngày
-     * @param toDate   Đến ngày
+     * @param transactionCode the transaction code
+     * @param completedAt     timestamp of failure
      */
-    // public List<TransactionStatisticsDto> getTransactionStatistics(Instant fromDate, Instant toDate) {}
+    public void markFailed(String transactionCode, Instant completedAt) {
+        String sql = """
+                UPDATE transactions
+                SET status = ?,
+                    completed_at = ?
+                WHERE transaction_code = ?
+                  AND status = ?
+                """;
+        jdbcTemplate.update(
+                sql,
+                TransactionStatus.FAILED.name(),
+                completedAt,
+                transactionCode,
+                TransactionStatus.PROCESSING.name()
+        );
+    }
 }
 

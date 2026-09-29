@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
   Settings as SettingsIcon, 
@@ -20,13 +21,38 @@ import {
   HelpCircle, 
   BookOpen, 
   FileText,
-  Sparkles
+  Sparkles,
+  Lock
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
 import { Badge } from "@/components/ui/badge";
+import { customerApi, CustomerProfile } from "@/lib/api/customerApi";
+import { TransactionPinModal } from "@/components/TransactionPinModal";
 
 export default function SettingsPage() {
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinMode, setPinMode] = useState<'SETUP' | 'CHANGE'>('SETUP');
+
+  const fetchProfile = () => {
+    customerApi.getMyProfile()
+      .then((res) => {
+        if (res?.success && res.data) {
+          setProfile(res.data);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const handleOpenPinModal = () => {
+    setPinMode(profile?.hasTransactionPin ? 'CHANGE' : 'SETUP');
+    setShowPinModal(true);
+  };
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#0D1527] text-slate-100 flex font-sans selection:bg-[#A3E635] selection:text-slate-950">
       {/* Fixed Sticky Sidebar Navigation */}
@@ -81,7 +107,29 @@ export default function SettingsPage() {
               <span>Bảo mật</span>
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Transaction PIN (Smart PIN) Card */}
+              <div 
+                onClick={handleOpenPinModal}
+                className="bg-[#1A253D]/80 hover:bg-[#253554] border border-slate-700/80 hover:border-[#A3E635] p-5 rounded-2xl flex flex-col items-center justify-center text-center gap-3 transition-all duration-200 group cursor-pointer shadow-md"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-[#A3E635] group-hover:scale-110 transition-transform">
+                  <KeyRound className="w-7 h-7" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-white group-hover:text-[#A3E635] transition-colors">Mã PIN giao dịch (Smart PIN)</div>
+                  {profile?.hasTransactionPin ? (
+                    <div className="text-[11px] text-[#A3E635] font-semibold mt-0.5 flex items-center justify-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Đã kích hoạt (Đổi PIN)
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-amber-400 font-semibold mt-0.5 flex items-center justify-center gap-1">
+                      <Lock className="w-3 h-3" /> Chưa thiết lập (Cài ngay)
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Change Password Card */}
               <Link 
                 href="/settings/change-password"
@@ -184,6 +232,16 @@ export default function SettingsPage() {
           </div>
         </main>
       </div>
+
+      {/* Transaction PIN Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        mode={pinMode}
+        onSuccess={() => {
+          fetchProfile();
+        }}
+      />
     </div>
   );
 }

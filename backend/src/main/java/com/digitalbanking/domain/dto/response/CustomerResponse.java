@@ -28,5 +28,6 @@ public class CustomerResponse {
     private KycStatus kycStatus;
     private String defaultAccountNumber;
     private BigDecimal defaultBalance;
+    private boolean hasTransactionPin;
     private Instant createdAt;
 }

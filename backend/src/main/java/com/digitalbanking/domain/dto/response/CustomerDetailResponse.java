@@ -38,6 +38,8 @@ public class CustomerDetailResponse {
 
     private List<CustomerAccountSummaryDto> accounts;
 
+    private boolean hasTransactionPin;
+
     private Instant createdAt;
     private Instant updatedAt;
 }

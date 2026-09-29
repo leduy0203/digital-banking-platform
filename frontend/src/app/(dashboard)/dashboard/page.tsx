@@ -25,12 +25,15 @@ import {
   Clock,
   AlertTriangle,
   User,
-  Loader2
+  Loader2,
+  KeyRound,
+  ShieldAlert
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
 import { customerApi, CustomerProfile } from "@/lib/api/customerApi";
 import { accountApi, AccountResponseData } from "@/lib/api/accountApi";
+import { TransactionPinModal } from "@/components/TransactionPinModal";
 
 export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true);
@@ -38,18 +41,21 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<AccountResponseData[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
-  useEffect(() => {
-    // 1. Fetch Profile
+  const fetchProfile = () => {
     customerApi.getMyProfile()
       .then((res) => {
         if (res?.success && res.data) {
           setProfile(res.data);
         }
       })
-      .catch(() => {
-        // Fallback
-      });
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    // 1. Fetch Profile
+    fetchProfile();
 
     // 2. Fetch Accounts list via /api/v1/accounts/my-accounts
     accountApi.getMyAccounts()
@@ -97,6 +103,38 @@ export default function DashboardPage() {
 
         {/* Scrollable Dashboard Body */}
         <main className="flex-1 p-8 space-y-8 overflow-y-auto">
+          {/* PIN Setup Alert Banner (Displayed when customer has not set up PIN) */}
+          {profile && profile.hasTransactionPin === false && (
+            <div className="bg-gradient-to-r from-amber-950/80 via-orange-950/60 to-amber-950/80 border border-amber-500/50 rounded-3xl p-5 shadow-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-md">
+                  <KeyRound className="w-6 h-6 animate-bounce" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-extrabold text-sm text-amber-200 tracking-wide">
+                      Chưa thiết lập Mã PIN giao dịch (Smart PIN)
+                    </h4>
+                    <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full uppercase">
+                      Bảo mật
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-200/70 mt-0.5 leading-relaxed">
+                    Bạn cần thiết lập mã PIN 6 số để thực hiện chuyển tiền, thanh toán và các giao dịch tài chính an toàn.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowPinModal(true)}
+                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-5 py-3 rounded-full flex items-center gap-2 shadow-lg shadow-amber-400/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Thiết lập ngay</span>
+              </button>
+            </div>
+          )}
+
           {/* Hero Banner Section */}
           <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-teal-900/60 via-emerald-800/40 to-cyan-900/60 border border-slate-700/50 shadow-2xl p-8 min-h-[320px] flex flex-col justify-between">
             <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(163,230,53,0.3),transparent_50%)]"></div>
@@ -339,6 +377,16 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
+
+      {/* Transaction PIN Setup Modal */}
+      <TransactionPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        mode="SETUP"
+        onSuccess={() => {
+          fetchProfile();
+        }}
+      />
     </div>
   );
 }
