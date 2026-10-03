@@ -9,6 +9,9 @@ import {
   AccountItem, 
   FreezeAccountPayload, 
   CashOpPayload, 
+  DepositCashPayload,
+  WithdrawCashPayload,
+  CashTransactionApiResponse,
   EmployeeTransaction, 
   EmployeeDashboardStats 
 } from "../types/employee";
@@ -547,6 +550,22 @@ export const employeeApi = {
       );
       return { success: true, message: `Đã mở khóa tài khoản ${accountNumber} thành công` };
     }
+  },
+
+  /**
+   * Nạp tiền mặt tại quầy (POST /api/v1/employee/transactions/deposit)
+   */
+  async depositCash(payload: DepositCashPayload): Promise<CashTransactionApiResponse> {
+    const res = await apiClient.post<CashTransactionApiResponse>("/employee/transactions/deposit", payload);
+    return res.data;
+  },
+
+  /**
+   * Rút tiền mặt tại quầy (POST /api/v1/employee/transactions/withdraw)
+   */
+  async withdrawCash(payload: WithdrawCashPayload): Promise<CashTransactionApiResponse> {
+    const res = await apiClient.post<CashTransactionApiResponse>("/employee/transactions/withdraw", payload);
+    return res.data;
   },
 
   /**

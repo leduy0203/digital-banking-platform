@@ -1,32 +1,36 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { transferApi } from '@/lib/api';
-import { TransferRequest, OtpVerificationPayload, TransferReceipt } from '@/lib/types';
+import { 
+  transferApi, 
+  InternalTransferInitiatePayload, 
+  InternalTransferInitiateApiResponse,
+  InternalTransferConfirmPayload, 
+  InternalTransferConfirmApiResponse 
+} from '@/lib/api';
 
 export function useTransfer() {
   const queryClient = useQueryClient();
 
-  const transferMutation = useMutation<TransferReceipt, Error, TransferRequest>({
-    mutationFn: (payload: TransferRequest) => transferApi.executeTransfer(payload),
-    onSuccess: (receipt) => {
-      if (receipt.status === 'COMPLETED') {
+  // Step 1: Initiate Transfer Mutation
+  const initiateMutation = useMutation<InternalTransferInitiateApiResponse, Error, InternalTransferInitiatePayload>({
+    mutationFn: (payload: InternalTransferInitiatePayload) => transferApi.initiateInternalTransfer(payload),
+  });
+
+  // Step 2: Confirm Transfer Mutation (Smart PIN)
+  const confirmMutation = useMutation<InternalTransferConfirmApiResponse, Error, InternalTransferConfirmPayload>({
+    mutationFn: (payload: InternalTransferConfirmPayload) => transferApi.confirmInternalTransfer(payload),
+    onSuccess: (res) => {
+      if (res?.success) {
         queryClient.invalidateQueries({ queryKey: ['accounts'] });
+        queryClient.invalidateQueries({ queryKey: ['my-history'] });
         queryClient.invalidateQueries({ queryKey: ['transactions'] });
       }
     },
   });
 
-  const otpMutation = useMutation<TransferReceipt, Error, OtpVerificationPayload>({
-    mutationFn: (payload: OtpVerificationPayload) => transferApi.verifyOtp(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['transactions'] });
-    },
-  });
-
   return {
-    executeTransfer: transferMutation.mutateAsync,
-    isTransferring: transferMutation.isPending,
-    verifyOtp: otpMutation.mutateAsync,
-    isVerifyingOtp: otpMutation.isPending,
+    initiateTransfer: initiateMutation.mutateAsync,
+    isInitiating: initiateMutation.isPending,
+    confirmTransfer: confirmMutation.mutateAsync,
+    isConfirming: confirmMutation.isPending,
   };
 }

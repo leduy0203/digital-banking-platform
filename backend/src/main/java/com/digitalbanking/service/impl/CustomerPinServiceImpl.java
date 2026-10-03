@@ -67,7 +67,7 @@ public class CustomerPinServiceImpl implements CustomerPinService {
         }
 
         if (!request.getNewPin().equals(request.getConfirmNewPin())) {
-            throw new BusinessException(ErrorCode.PASSWORD_NOT_MATCH);
+            throw new BusinessException(ErrorCode.PIN_NOT_MATCH);
         }
 
         customer.setTransactionPinHash(passwordEncoder.encode(request.getNewPin()));

@@ -66,11 +66,8 @@ public class TransferTxExecutor {
         // locking
         accountJdbcRepository.lockAccountsForTransfer(sourceAccountNumber, targetAccountNumber);
 
-        accountJdbcRepository.debit(sourceAccountNumber, amount);
-        BigDecimal sourceBalanceAfter = accountJdbcRepository.getBalance(sourceAccountNumber);
-
-        accountJdbcRepository.credit(targetAccountNumber, amount);
-        BigDecimal targetBalanceAfter = accountJdbcRepository.getBalance(targetAccountNumber);
+        BigDecimal sourceBalanceAfter = accountJdbcRepository.debit(sourceAccountNumber, amount);
+        BigDecimal targetBalanceAfter = accountJdbcRepository.credit(targetAccountNumber, amount);
 
         LedgerEntryEntity debitLedger = LedgerEntryEntity.builder()
                 .transaction(txn)

@@ -4,6 +4,7 @@ import com.digitalbanking.exception.BusinessException;
 import com.digitalbanking.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -43,7 +44,7 @@ public class AccountJdbcRepository {
      * @param amount        the amount to debit
      * @throws BusinessException with ErrorCode.INSUFFICIENT_FUNDS if conditions are not met
      */
-    public void debit(String accountNumber, BigDecimal amount) {
+    public BigDecimal debit(String accountNumber, BigDecimal amount) {
         String sql = """
                 UPDATE accounts
                 SET balance = balance - ?,
@@ -51,10 +52,18 @@ public class AccountJdbcRepository {
                 WHERE account_number = ?
                   AND status = 'ACTIVE'
                   AND (balance - frozen_balance) >= ?
+                RETURNING balance
                 """;
 
-        int affected = jdbcTemplate.update(sql, amount, accountNumber, amount);
-        if (affected != 1) {
+        try {
+            return jdbcTemplate.queryForObject(
+                    sql,
+                    BigDecimal.class,
+                    amount,
+                    accountNumber,
+                    amount
+            );
+        } catch (EmptyResultDataAccessException e) {
             throw new BusinessException(ErrorCode.INSUFFICIENT_FUNDS);
         }
     }
@@ -65,19 +74,27 @@ public class AccountJdbcRepository {
      *
      * @param accountNumber the destination account number to credit
      * @param amount        the amount to credit
+     * @return updated balance after credit
      * @throws BusinessException with ErrorCode.ACCOUNT_LOCKED if target account is inactive or not found
      */
-    public void credit(String accountNumber, BigDecimal amount) {
+    public BigDecimal credit(String accountNumber, BigDecimal amount) {
         String sql = """
                 UPDATE accounts
                 SET balance = balance + ?,
                     updated_at = NOW()
                 WHERE account_number = ?
                   AND status = 'ACTIVE'
+                RETURNING balance
                 """;
 
-        int affected = jdbcTemplate.update(sql, amount, accountNumber);
-        if (affected != 1) {
+        try {
+            return jdbcTemplate.queryForObject(
+                    sql,
+                    BigDecimal.class,
+                    amount,
+                    accountNumber
+            );
+        } catch (EmptyResultDataAccessException e) {
             throw new BusinessException(ErrorCode.ACCOUNT_LOCKED);
         }
     }

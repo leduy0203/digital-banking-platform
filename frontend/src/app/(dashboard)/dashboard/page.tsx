@@ -27,21 +27,29 @@ import {
   User,
   Loader2,
   KeyRound,
-  ShieldAlert
+  ShieldAlert,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ChevronRight
 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { CustomerTopbar } from "@/components/layout/CustomerTopbar";
 import { customerApi, CustomerProfile } from "@/lib/api/customerApi";
 import { accountApi, AccountResponseData } from "@/lib/api/accountApi";
+import { transactionApi, TransactionSummaryData } from "@/lib/api";
 import { TransactionPinModal } from "@/components/TransactionPinModal";
+import { TransactionReceiptModal } from "@/components/TransactionReceiptModal";
 
 export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(true);
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [accounts, setAccounts] = useState<AccountResponseData[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<TransactionSummaryData[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
+  const [isLoadingTx, setIsLoadingTx] = useState(true);
   const [copied, setCopied] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [selectedTxCode, setSelectedTxCode] = useState<string | null>(null);
 
   const fetchProfile = () => {
     customerApi.getMyProfile()
@@ -64,108 +72,105 @@ export default function DashboardPage() {
           setAccounts(res.data);
         }
       })
-      .catch(() => {
-        // Fallback
-      })
+      .catch(() => {})
       .finally(() => {
         setIsLoadingAccounts(false);
       });
+
+    // 3. Fetch Recent Transactions via /api/v1/transactions/my-history
+    transactionApi.getMyHistory({ page: 0, size: 3 })
+      .then((res) => {
+        if (res?.success && res.data) {
+          setRecentTransactions(res.data.content || []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        setIsLoadingTx(false);
+      });
   }, []);
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'CD';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  const copyAccountNumber = (accNum?: string) => {
-    if (!accNum) return;
-    navigator.clipboard.writeText(accNum);
+  const copyAccountNumber = (accNumber: string) => {
+    navigator.clipboard.writeText(accNumber);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Primary checking account or first account
-  const primaryAccount = accounts.find(a => a.accountType === 'CHECKING') || accounts[0];
-  const defaultAccountNumber = primaryAccount?.accountNumber || "9333xxxxxx";
-  const defaultBalanceFormatted = (primaryAccount?.availableBalance ?? primaryAccount?.balance ?? 0).toLocaleString('vi-VN');
+  // Default Account calculation
+  const defaultAccount = accounts.find((a) => a.isDefault || a.accountType === "CHECKING") || accounts[0];
+  const defaultAccountNumber = defaultAccount?.accountNumber || "9333436513";
+  const defaultBalance = defaultAccount?.availableBalance ?? defaultAccount?.balance ?? 0;
+  const defaultBalanceFormatted = defaultBalance.toLocaleString("vi-VN");
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-[#0D1527] text-slate-100 flex font-sans selection:bg-[#A3E635] selection:text-slate-950">
       {/* Fixed Sticky Sidebar Navigation */}
       <Sidebar />
 
-      {/* Main Viewport Column (Fixed Header + Scrollable Body) */}
+      {/* Main Viewport Column */}
       <div className="flex-1 flex flex-col h-screen min-w-0 overflow-hidden">
         {/* Dynamic Connected Topbar */}
         <CustomerTopbar />
 
-        {/* Scrollable Dashboard Body */}
+        {/* Scrollable Main Content Body */}
         <main className="flex-1 p-8 space-y-8 overflow-y-auto">
-          {/* PIN Setup Alert Banner (Displayed when customer has not set up PIN) */}
-          {profile && profile.hasTransactionPin === false && (
-            <div className="bg-gradient-to-r from-amber-950/80 via-orange-950/60 to-amber-950/80 border border-amber-500/50 rounded-3xl p-5 shadow-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          {/* Smart PIN Reminder Banner if NOT set yet */}
+          {profile && !profile.hasTransactionPin && (
+            <div className="bg-gradient-to-r from-amber-950/80 via-[#1A253D] to-amber-950/80 border border-amber-500/40 rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl animate-in fade-in slide-in-from-top-2 duration-300">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-md">
-                  <KeyRound className="w-6 h-6 animate-bounce" />
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                  <ShieldAlert className="w-6 h-6 animate-pulse" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h4 className="font-extrabold text-sm text-amber-200 tracking-wide">
-                      Chưa thiết lập Mã PIN giao dịch (Smart PIN)
-                    </h4>
-                    <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full uppercase">
-                      Bảo mật
+                    <span className="font-extrabold text-white text-sm">Chưa thiết lập Smart PIN giao dịch</span>
+                    <span className="text-[10px] font-bold bg-amber-900/80 text-amber-300 px-2 py-0.5 rounded-full border border-amber-700 uppercase">
+                      Bảo mật cấp 2
                     </span>
                   </div>
-                  <p className="text-xs text-amber-200/70 mt-0.5 leading-relaxed">
-                    Bạn cần thiết lập mã PIN 6 số để thực hiện chuyển tiền, thanh toán và các giao dịch tài chính an toàn.
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Để thực hiện chuyển tiền an toàn, bạn cần tạo mã Smart PIN 6 chữ số.
                   </p>
                 </div>
               </div>
-
               <button
                 onClick={() => setShowPinModal(true)}
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-5 py-3 rounded-full flex items-center gap-2 shadow-lg shadow-amber-400/20 transition-all shrink-0 cursor-pointer hover:scale-105 active:scale-95"
+                className="bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-xs px-5 py-2.5 rounded-full shadow-lg shadow-[#A3E635]/20 flex items-center gap-1.5 transition-all shrink-0 cursor-pointer"
               >
                 <KeyRound className="w-3.5 h-3.5" />
-                <span>Thiết lập ngay</span>
+                <span>Thiết lập Smart PIN ngay</span>
               </button>
             </div>
           )}
 
-          {/* Hero Banner Section */}
-          <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-teal-900/60 via-emerald-800/40 to-cyan-900/60 border border-slate-700/50 shadow-2xl p-8 min-h-[320px] flex flex-col justify-between">
-            <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(163,230,53,0.3),transparent_50%)]"></div>
-            
-            {/* Top User Profile Header */}
-            <div className="flex items-center justify-between z-10">
-              <Link 
-                href="/profile"
-                className="flex items-center gap-4 bg-slate-900/50 hover:bg-slate-900/80 backdrop-blur-md p-2.5 pr-6 rounded-full border border-slate-700/60 hover:border-[#A3E635]/50 transition-all group"
-              >
-                {profile?.avatarUrl ? (
-                  <img 
-                    src={profile.avatarUrl} 
-                    alt="Avatar" 
-                    className="w-12 h-12 rounded-full object-cover border-2 border-emerald-400 shadow-md group-hover:scale-105 transition-transform" 
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-slate-950 font-black text-base shadow-md group-hover:scale-105 transition-transform">
-                    {getInitials(profile?.fullName)}
-                  </div>
-                )}
+          {/* Hero Premium Dark Gradient Card */}
+          <div className="bg-gradient-to-br from-[#1A253D] via-[#141C2E] to-[#0D1527] border border-slate-800 rounded-3xl p-8 relative overflow-hidden shadow-2xl">
+            {/* Ambient Background Circles */}
+            <div className="absolute -right-16 -top-16 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -left-16 -bottom-16 w-80 h-80 bg-[#A3E635]/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            {/* Profile Overview Bar */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-6 z-10 relative">
+              <Link href="/profile" className="flex items-center gap-4 group">
+                <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-[#A3E635] flex items-center justify-center text-slate-950 font-black text-xl shadow-lg border-2 border-emerald-400 group-hover:scale-105 transition-transform">
+                  {profile?.fullName ? profile.fullName.charAt(0) : "U"}
+                </div>
                 <div>
-                  <h2 className="font-extrabold text-base text-white tracking-wide group-hover:text-[#A3E635] transition-colors">
-                    {profile?.fullName || "KHÁCH HÀNG"}
-                  </h2>
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
-                    {profile?.kycStatus === 'VERIFIED' ? (
-                      <span className="text-[#A3E635] flex items-center gap-1">
-                        <ShieldCheck className="w-3.5 h-3.5" /> eKYC Đã xác minh &gt;
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-black text-2xl text-white tracking-wide group-hover:text-[#A3E635] transition-colors">
+                      {profile?.fullName || "KHÁCH HÀNG DIGITAL BANK"}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                    <span>
+                      Mã KH: <span className="font-mono font-bold text-slate-200">{profile?.customerCode || "CUS-888999"}</span>
+                    </span>
+                    <span>•</span>
+                    {profile?.kycStatus === "VERIFIED" ? (
+                      <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" /> eKYC Đã xác thực &gt;
                       </span>
-                    ) : profile?.kycStatus === 'REJECTED' ? (
+                    ) : profile?.kycStatus === "REJECTED" ? (
                       <span className="text-red-400 flex items-center gap-1">
                         <AlertTriangle className="w-3.5 h-3.5" /> eKYC Bị từ chối &gt;
                       </span>
@@ -197,7 +202,7 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              {/* 6 Quick Action Round Buttons */}
+              {/* 6 Quick Action Buttons */}
               <div className="grid grid-cols-6 gap-4 text-center">
                 <Link href="/transfers" className="group flex flex-col items-center gap-2.5">
                   <div className="w-14 h-14 rounded-full bg-[#162238]/90 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 group-hover:border-[#A3E635] group-hover:text-[#A3E635] transition-all shadow-lg">
@@ -324,36 +329,75 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            {/* Card 2: Personal Finance Management */}
+            {/* Card 2: Recent Transactions Activity */}
             <div className="bg-[#141C2E] border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
               <div>
-                <h4 className="font-bold text-base text-white mb-4 text-center">Quản lý tài chính cá nhân</h4>
-
-                {/* Spending Bar Chart Graphics */}
-                <div className="h-28 flex items-end justify-center gap-3 py-2 px-4 border-b border-slate-800/80 mb-4">
-                  {[
-                    { label: "T2", height: "h-12" },
-                    { label: "T3", height: "h-20" },
-                    { label: "T4", height: "h-14" },
-                    { label: "T5", height: "h-24" },
-                    { label: "T6", height: "h-10" },
-                    { label: "T7", height: "h-22" },
-                  ].map((bar, idx) => (
-                    <div key={idx} className="flex flex-col items-center gap-1.5">
-                      <div className={`w-3.5 ${bar.height} bg-gradient-to-t from-emerald-600 to-[#A3E635] rounded-full shadow-sm`}></div>
-                      <span className="text-[10px] text-slate-400 font-semibold">{bar.label}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-bold text-base text-white">Giao dịch gần đây</h4>
+                  <Link href="/transactions" className="text-xs text-[#A3E635] hover:underline font-semibold flex items-center gap-0.5">
+                    <span>Tất cả</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </Link>
                 </div>
 
-                <p className="text-xs text-slate-300 font-semibold text-center leading-relaxed">
-                  Lập kế hoạch và quản lý chi tiêu hiệu quả
-                </p>
+                {isLoadingTx && (
+                  <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400">
+                    <Loader2 className="w-5 h-5 animate-spin text-[#A3E635]" />
+                    <span className="text-[11px]">Đang tải...</span>
+                  </div>
+                )}
+
+                {!isLoadingTx && recentTransactions.length === 0 && (
+                  <div className="py-8 text-center space-y-2">
+                    <History className="w-8 h-8 text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-400">Chưa có giao dịch gần đây</p>
+                  </div>
+                )}
+
+                {!isLoadingTx && recentTransactions.length > 0 && (
+                  <div className="space-y-2.5">
+                    {recentTransactions.map((tx) => {
+                      const isIncome = tx.direction === 'IN';
+                      return (
+                        <div
+                          key={tx.id || tx.transactionCode}
+                          onClick={() => setSelectedTxCode(tx.transactionCode)}
+                          className="bg-[#1A253D] hover:bg-[#25324D] border border-slate-700/50 p-3 rounded-2xl flex items-center justify-between cursor-pointer transition-all group"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs shrink-0 ${
+                              isIncome ? 'bg-emerald-950 text-emerald-400' : 'bg-slate-900 text-slate-300'
+                            }`}>
+                              {isIncome ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-white truncate group-hover:text-[#A3E635] transition-colors">
+                                {tx.counterpartName || tx.counterpartAccountNumber || (isIncome ? 'Nhận tiền' : 'Chuyển tiền')}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {new Date(tx.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} • {tx.transactionCode}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className={`font-mono font-bold text-xs ${isIncome ? 'text-emerald-400' : 'text-slate-100'}`}>
+                              {isIncome ? '+' : '-'}{tx.amount.toLocaleString('vi-VN')}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              <button className="w-full mt-6 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A3E635]/20 transition-all">
-                <span>Khám phá ngay</span>
-              </button>
+              <Link href="/transactions" className="w-full mt-4 block">
+                <button className="w-full border border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold text-xs py-2.5 rounded-full flex items-center justify-center gap-1.5 transition-all">
+                  <History className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Tra cứu lịch sử chi tiết</span>
+                </button>
+              </Link>
             </div>
 
             {/* Card 3: Digital Loyalty Rewards */}
@@ -366,13 +410,15 @@ export default function DashboardPage() {
                   <Sparkles className="w-5 h-5 text-amber-300 animate-pulse" />
                 </div>
                 <p className="text-xs text-fuchsia-100 leading-relaxed font-medium">
-                  Tích điểm đổi quà không giới hạn cho mọi giao dịch thanh toán.
+                  Tích điểm thưởng đổi quà không giới hạn cho mọi giao dịch chuyển tiền.
                 </p>
               </div>
 
-              <button className="w-full mt-6 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A3E635]/20 transition-all">
-                <span>Trải nghiệm ngay</span>
-              </button>
+              <Link href="/transfers" className="w-full mt-6 block">
+                <button className="w-full bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A3E635]/20 transition-all cursor-pointer">
+                  <span>Trải nghiệm ngay</span>
+                </button>
+              </Link>
             </div>
           </div>
         </main>
@@ -386,6 +432,13 @@ export default function DashboardPage() {
         onSuccess={() => {
           fetchProfile();
         }}
+      />
+
+      {/* Transaction Receipt Popover Modal */}
+      <TransactionReceiptModal
+        isOpen={!!selectedTxCode}
+        onClose={() => setSelectedTxCode(null)}
+        transactionCode={selectedTxCode}
       />
     </div>
   );

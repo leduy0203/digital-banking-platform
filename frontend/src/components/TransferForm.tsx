@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import Link from 'next/link';
 import { 
   ArrowRightLeft, 
   ShieldCheck, 
@@ -11,23 +12,30 @@ import {
   BookUser, 
   Info, 
   ChevronRight, 
-  ChevronDown,
-  Wallet,
-  Building,
-  Eye,
-  EyeOff,
-  Check
+  ChevronDown, 
+  Wallet, 
+  Building, 
+  Eye, 
+  EyeOff, 
+  Check,
+  History,
+  Copy,
+  AlertCircle
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useTransfer } from '@/hooks/useTransfer';
-import { OtpModal } from './OtpModal';
-import { TransferReceipt } from '@/lib/types';
-import { accountApi, AccountResponseData } from '@/lib/api/accountApi';
+import { PinVerificationModal } from './PinVerificationModal';
+import { 
+  accountApi, 
+  AccountResponseData, 
+  TransferInitiateResponseData, 
+  TransactionResponseData 
+} from '@/lib/api';
 
-// Supported Banks List with Rich Icons
+// Supported Banks List
 const BANKS_LIST = [
   { code: 'DBC', name: 'Digital Bank', desc: 'Cùng hệ thống - Miễn phí 24/7', icon: '🏛️' },
   { code: 'VCB', name: 'Vietcombank', desc: 'Ngân hàng TMCP Ngoại Thương (Napas 24/7)', icon: '🟢' },
@@ -46,9 +54,6 @@ const SAVED_BENEFICIARIES = [
   { accountNumber: '1029384756', accountName: 'LE HOANG C', bankName: 'Techcombank' },
 ];
 
-/**
- * Formats a raw number string with dot separators (e.g. 500000 -> 500.000)
- */
 function formatNumberWithDots(val: string | number): string {
   if (val === '' || val === null || val === undefined) return '';
   const cleanNum = val.toString().replace(/\D/g, '');
@@ -66,7 +71,7 @@ const transferSchema = z
       .length(10, 'Số tài khoản thụ hưởng phải đúng 10 chữ số')
       .regex(/^\d+$/, 'Số tài khoản chỉ bao gồm chữ số'),
     formattedAmount: z.string().min(1, 'Vui lòng nhập số tiền chuyển'),
-    description: z.string().max(100, 'Nội dung giao dịch tối đa 100 ký tự').optional(),
+    description: z.string().max(255, 'Nội dung giao dịch tối đa 255 ký tự').optional(),
   })
   .refine((data) => data.sourceAccountNumber !== data.targetAccountNumber, {
     message: 'Tài khoản thụ hưởng không được trùng với tài khoản nguồn',
@@ -76,25 +81,23 @@ const transferSchema = z
 type TransferFormValues = z.infer<typeof transferSchema>;
 
 export function TransferForm() {
-  const { executeTransfer, isTransferring, verifyOtp, isVerifyingOtp } = useTransfer();
+  const { initiateTransfer, isInitiating, confirmTransfer, isConfirming } = useTransfer();
   
   // Step State: 1 = Form Input, 2 = Confirmation Review, 3 = Completed Receipt
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   
   const [showBalance, setShowBalance] = useState(true);
-  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   const [showBeneficiaryPicker, setShowBeneficiaryPicker] = useState(false);
   const [openBankDropdown, setOpenBankDropdown] = useState(false);
   const [openAccountDropdown, setOpenAccountDropdown] = useState(false);
-  const [pendingTxRef, setPendingTxRef] = useState<string | null>(null);
-  const [completedReceipt, setCompletedReceipt] = useState<TransferReceipt | null>(null);
-  const [reviewValues, setReviewValues] = useState<{
-    sourceAccountNumber: string;
-    bankCode: string;
-    targetAccountNumber: string;
-    amount: number;
-    description?: string;
-  } | null>(null);
+  const [initiateError, setInitiateError] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+
+  // Transfer States
+  const [initiatedData, setInitiatedData] = useState<TransferInitiateResponseData | null>(null);
+  const [completedReceipt, setCompletedReceipt] = useState<TransactionResponseData | null>(null);
 
   // Available source accounts state
   const [userAccounts, setUserAccounts] = useState<AccountResponseData[]>([]);
@@ -114,7 +117,7 @@ export function TransferForm() {
   } = useForm<TransferFormValues>({
     resolver: zodResolver(transferSchema),
     defaultValues: {
-      sourceAccountNumber: '9333436513',
+      sourceAccountNumber: '',
       bankCode: 'DBC',
       targetAccountNumber: '',
       formattedAmount: '500.000',
@@ -129,7 +132,7 @@ export function TransferForm() {
 
   // Debounce Auto-Lookup for DBC (Digital Bank)
   useEffect(() => {
-    if (!targetAccountNumber || targetAccountNumber.trim().length < 6) {
+    if (!targetAccountNumber || targetAccountNumber.trim().length !== 10) {
       setLookupName(null);
       setLookupError(null);
       return;
@@ -150,11 +153,11 @@ export function TransferForm() {
           }
         } catch (err: any) {
           setLookupName(null);
-          setLookupError(err.response?.data?.detail || 'Tài khoản thụ hưởng không tồn tại hoặc đã bị khóa.');
+          setLookupError(err.response?.data?.detail || err.response?.data?.message || 'Tài khoản thụ hưởng không tồn tại hoặc đã bị khóa.');
         } finally {
           setIsLookingUp(false);
         }
-      }, 500);
+      }, 400);
 
       return () => clearTimeout(timer);
     } else {
@@ -185,13 +188,10 @@ export function TransferForm() {
         { number: '9333436513', name: 'Tài khoản thanh toán mặc định', balance: 0, currency: 'VND' },
       ];
 
-  // Calculate numerical amount from formatted dot string
   const numericAmount = parseInt((rawFormattedAmount || '').replace(/\D/g, ''), 10) || 0;
-
   const activeAccountObj = accounts.find((acc) => acc.number === selectedSourceAccount) || accounts[0];
   const activeBankObj = BANKS_LIST.find((b) => b.code === selectedBankCode) || BANKS_LIST[0];
 
-  // Directly Format Dots Inside Amount Input
   const handleAmountInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawVal = e.target.value.replace(/\D/g, '');
     if (!rawVal) {
@@ -202,7 +202,6 @@ export function TransferForm() {
     setValue('formattedAmount', formatted);
   };
 
-  // Quick Amount preset handler
   const handleQuickAmount = (addAmount: number | 'ALL') => {
     if (addAmount === 'ALL') {
       setValue('formattedAmount', formatNumberWithDots(activeAccountObj.balance));
@@ -213,113 +212,90 @@ export function TransferForm() {
     }
   };
 
-  // Step 1 -> Step 2 Review
-  const handleProceedToReview = (values: TransferFormValues) => {
-    if (numericAmount < 10000) return;
-    setReviewValues({
-      sourceAccountNumber: values.sourceAccountNumber,
-      bankCode: values.bankCode,
-      targetAccountNumber: values.targetAccountNumber,
-      amount: numericAmount,
-      description: values.description,
-    });
-    setCurrentStep(2);
-  };
+  // Step 1 -> Call POST /api/v1/transfers/internal/initiate
+  const handleProceedToInitiate = async (values: TransferFormValues) => {
+    if (numericAmount < 1000) return;
+    setInitiateError(null);
 
-  // Step 2 -> Execute Transfer
-  const handleConfirmTransfer = async () => {
-    if (!reviewValues) return;
     try {
-      const receipt = await executeTransfer({
-        sourceAccountNumber: reviewValues.sourceAccountNumber,
-        targetAccountNumber: reviewValues.targetAccountNumber,
-        amount: reviewValues.amount,
-        currency: 'VND',
-        description: reviewValues.description,
+      const res = await initiateTransfer({
+        sourceAccountNumber: values.sourceAccountNumber,
+        targetAccountNumber: values.targetAccountNumber,
+        amount: numericAmount,
+        description: values.description || 'Chuyen tien',
       });
 
-      if (receipt.status === 'PENDING_OTP' || reviewValues.amount >= 10000000) {
-        setPendingTxRef(receipt.transactionReference || 'TXN-' + Math.floor(100000 + Math.random() * 900000));
-        setShowOtpModal(true);
-      } else {
-        setCompletedReceipt(receipt);
-        setCurrentStep(3);
+      if (res?.success && res.data) {
+        setInitiatedData(res.data);
+        setCurrentStep(2);
       }
-    } catch {
-      // Mock completion
-      const mockReceipt: TransferReceipt = {
-        transactionReference: 'TXN-' + Math.floor(100000 + Math.random() * 900000),
-        sourceAccountNumber: reviewValues.sourceAccountNumber,
-        targetAccountNumber: reviewValues.targetAccountNumber,
-        amount: reviewValues.amount,
-        fee: 0,
-        status: 'COMPLETED',
-        executedAt: new Date().toISOString(),
-      };
-
-      if (reviewValues.amount >= 10000000) {
-        setPendingTxRef(mockReceipt.transactionReference);
-        setShowOtpModal(true);
-      } else {
-        setCompletedReceipt(mockReceipt);
-        setCurrentStep(3);
-      }
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.response?.data?.message || 'Không thể khởi tạo giao dịch. Vui lòng kiểm tra lại số dư hoặc tài khoản nhận.';
+      setInitiateError(msg);
     }
   };
 
-  const handleOtpVerify = async (otpCode: string) => {
+  // Step 2 -> Open PIN Modal
+  const handleOpenPinVerification = () => {
+    setPinError(null);
+    setShowPinModal(true);
+  };
+
+  // Submit Smart PIN -> Call POST /api/v1/transfers/internal/confirm
+  const handleConfirmWithPin = async (pin: string) => {
+    if (!initiatedData) return;
+    setPinError(null);
+
     try {
-      if (pendingTxRef) {
-        await verifyOtp({
-          transactionReference: pendingTxRef,
-          otpCode,
-        });
+      const res = await confirmTransfer({
+        transactionCode: initiatedData.transactionCode,
+        otpCode: pin,
+      });
+
+      if (res?.success && res.data) {
+        setCompletedReceipt(res.data);
+        setShowPinModal(false);
+        setCurrentStep(3);
       }
-    } catch {
-      // Ignore
-    } finally {
-      const mockReceipt: TransferReceipt = {
-        transactionReference: pendingTxRef || 'TXN-' + Math.floor(100000 + Math.random() * 900000),
-        sourceAccountNumber: reviewValues?.sourceAccountNumber || '9333436513',
-        targetAccountNumber: reviewValues?.targetAccountNumber || '8880987654',
-        amount: reviewValues?.amount || 500000,
-        fee: 0,
-        status: 'COMPLETED',
-        executedAt: new Date().toISOString(),
-      };
-      setCompletedReceipt(mockReceipt);
-      setShowOtpModal(false);
-      setCurrentStep(3);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || err.response?.data?.message || 'Mã Smart PIN không chính xác hoặc giao dịch đã hết hạn.';
+      setPinError(msg);
     }
+  };
+
+  const handleCopyTxCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
   };
 
   return (
     <div className="w-full space-y-6 font-sans">
-      {/* 4-Step Progress Indicator Bar */}
+      {/* 3-Step Progress Indicator Bar */}
       <div className="bg-[#141C2E] border border-slate-800 rounded-3xl p-5 shadow-lg">
         <div className="flex items-center justify-between text-xs mb-3">
           <span className="font-bold text-slate-300">
-            Bước: <span className="text-[#A3E635] font-extrabold">{currentStep}/4</span> - {' '}
+            Bước: <span className="text-[#A3E635] font-extrabold">{currentStep}/3</span> - {' '}
             {currentStep === 1 && 'Khởi tạo giao dịch'}
-            {currentStep === 2 && 'Xác nhận thông tin'}
-            {currentStep === 3 && 'Kết quả giao dịch'}
+            {currentStep === 2 && 'Xác nhận thông tin & Smart PIN'}
+            {currentStep === 3 && 'Biên lai giao dịch thành công'}
           </span>
           <span className="text-slate-400 text-[11px] flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Napas 24/7 Bảo mật cao
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Hệ thống bảo mật 2 lớp Smart PIN
           </span>
         </div>
 
         <div className="h-2 w-full bg-[#1A253D] rounded-full overflow-hidden flex">
           <div 
             className="h-full bg-gradient-to-r from-emerald-500 via-[#A3E635] to-teal-400 transition-all duration-500 rounded-full"
-            style={{ width: `${(currentStep / 4) * 100}%` }}
+            style={{ width: `${(currentStep / 3) * 100}%` }}
           ></div>
         </div>
       </div>
 
       {/* STEP 1: TRANSACTION CREATION FORM */}
       {currentStep === 1 && (
-        <form onSubmit={handleSubmit(handleProceedToReview)} className="space-y-6">
+        <form onSubmit={handleSubmit(handleProceedToInitiate)} className="space-y-6">
           {/* SECTION 1: TÀI KHOẢN NGUỒN */}
           <div className="bg-[#141C2E] border border-slate-800/80 rounded-3xl p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
@@ -332,22 +308,20 @@ export function TransferForm() {
               </Badge>
             </div>
 
-            {/* Custom Soft Rounded Source Account Selector */}
+            {/* Source Account Selector */}
             <div className="bg-gradient-to-r from-[#1A253D] via-[#162238] to-[#1A253D] border border-slate-700/80 rounded-2xl p-5 space-y-4 shadow-inner">
               <div className="space-y-1.5 relative">
                 <label className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Chọn tài khoản thanh toán</label>
                 
-                {/* Custom Soft Rounded Dropdown Trigger */}
                 <button
                   type="button"
                   onClick={() => setOpenAccountDropdown(!openAccountDropdown)}
-                  className="w-full bg-[#0D1527] border border-slate-700 hover:border-[#A3E635] focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] rounded-2xl px-5 py-3.5 text-sm text-white font-mono font-bold flex items-center justify-between transition-all duration-200 cursor-pointer text-left"
+                  className="w-full bg-[#0D1527] border border-slate-700 hover:border-[#A3E635] focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 rounded-2xl px-5 py-3.5 text-sm text-white font-mono font-bold flex items-center justify-between transition-all duration-200 cursor-pointer text-left"
                 >
                   <span className="truncate">{activeAccountObj.number} - {activeAccountObj.name}</span>
                   <ChevronDown className={`w-4 h-4 text-emerald-400 transition-transform duration-200 ${openAccountDropdown ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Soft Rounded Custom Dropdown Popover */}
                 {openAccountDropdown && (
                   <div className="absolute top-full left-0 w-full mt-2 bg-[#141C2E] border border-emerald-500/40 rounded-2xl p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95 duration-150 space-y-1">
                     {accounts.map((acc) => (
@@ -436,14 +410,14 @@ export function TransferForm() {
             )}
 
             <div className="space-y-4">
-              {/* Soft Rounded Custom Bank Dropdown Selector */}
+              {/* Bank Selector */}
               <div className="space-y-1.5 relative">
                 <label className="text-xs text-slate-400 font-medium">Ngân hàng nhận</label>
                 
                 <button
                   type="button"
                   onClick={() => setOpenBankDropdown(!openBankDropdown)}
-                  className="w-full bg-[#1A253D] border border-slate-700 hover:border-[#A3E635] focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] rounded-2xl px-5 py-3.5 text-sm text-slate-100 font-semibold flex items-center justify-between transition-all duration-200 cursor-pointer text-left"
+                  className="w-full bg-[#1A253D] border border-slate-700 hover:border-[#A3E635] focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 rounded-2xl px-5 py-3.5 text-sm text-slate-100 font-semibold flex items-center justify-between transition-all duration-200 cursor-pointer text-left"
                 >
                   <span className="flex items-center gap-2.5 truncate">
                     <span>{activeBankObj.icon}</span>
@@ -483,18 +457,19 @@ export function TransferForm() {
                 )}
               </div>
 
+              {/* Target Account Input */}
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 font-medium">Tài khoản / Thẻ nhận</label>
+                <label className="text-xs text-slate-400 font-medium">Số tài khoản thụ hưởng (10 số)</label>
                 <div className="relative">
                   <Input
                     type="text"
-                    placeholder="Nhập 10 chữ số số tài khoản thụ hưởng"
+                    placeholder="Nhập 10 chữ số tài khoản nhận"
                     {...register('targetAccountNumber')}
-                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] text-white font-mono rounded-2xl h-13 text-base font-bold placeholder:text-slate-500 placeholder:font-normal placeholder:text-sm transition-all pr-10"
+                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white font-mono rounded-2xl h-13 text-base font-bold placeholder:text-slate-500 placeholder:font-normal placeholder:text-sm transition-all pr-10"
                   />
                   {isLookingUp && (
-                    <div className="absolute right-4 top-4 text-xs text-slate-400 animate-pulse">
-                      Đang tra cứu...
+                    <div className="absolute right-4 top-4 text-xs text-slate-400 animate-pulse font-medium">
+                      Đang tra cứu tên...
                     </div>
                   )}
                 </div>
@@ -504,7 +479,7 @@ export function TransferForm() {
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-[#A3E635]" />
                       <span className="text-xs text-slate-300 font-medium">Chủ tài khoản:</span>
-                      <span className="text-xs font-black text-[#A3E635] tracking-wide">{lookupName}</span>
+                      <span className="text-xs font-black text-[#A3E635] tracking-wide uppercase">{lookupName}</span>
                     </div>
                     <Badge variant="outline" className="border-emerald-700 text-emerald-400 text-[10px]">
                       Hợp lệ
@@ -528,10 +503,10 @@ export function TransferForm() {
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
               <h3 className="font-bold text-base text-white flex items-center gap-2">
                 <ArrowRightLeft className="w-5 h-5 text-emerald-400" />
-                <span>Thông tin giao dịch</span>
+                <span>Số tiền & Nội dung</span>
               </h3>
               <span className="text-xs text-slate-400 flex items-center gap-1">
-                <Info className="w-3.5 h-3.5 text-amber-400" /> Hạn mức: 500,000,000 VND / ngày
+                <Info className="w-3.5 h-3.5 text-amber-400" /> Tối thiểu 1.000 VND
               </span>
             </div>
 
@@ -539,14 +514,13 @@ export function TransferForm() {
               <div className="space-y-1.5">
                 <label className="text-xs text-slate-400 font-medium">Số tiền chuyển</label>
                 
-                {/* Formatted Number Input Directly Inside Box */}
                 <div className="relative">
                   <Input
                     type="text"
                     placeholder="0"
                     value={rawFormattedAmount}
                     onChange={handleAmountInputChange}
-                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] text-[#A3E635] font-black text-2xl pl-5 pr-16 h-14 rounded-2xl font-mono tracking-wide transition-all"
+                    className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-[#A3E635] font-black text-2xl pl-5 pr-16 h-14 rounded-2xl font-mono tracking-wide transition-all"
                   />
                   <span className="absolute right-5 top-4 font-bold text-slate-400 text-sm">VND</span>
                 </div>
@@ -588,7 +562,7 @@ export function TransferForm() {
                   type="text"
                   placeholder="LE CONG DUY chuyen tien..."
                   {...register('description')}
-                  className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 focus:shadow-[0_0_15px_rgba(163,230,53,0.25)] text-white rounded-2xl h-12 text-sm placeholder:text-slate-500 transition-all"
+                  className="bg-[#1A253D] border-slate-700 focus:border-[#A3E635] focus:ring-2 focus:ring-[#A3E635]/30 text-white rounded-2xl h-12 text-sm placeholder:text-slate-500 transition-all"
                 />
                 {errors.description && (
                   <p className="text-xs text-red-400 font-medium">{errors.description.message}</p>
@@ -596,12 +570,20 @@ export function TransferForm() {
               </div>
             </div>
 
-            {/* Neon Green Submit Button */}
+            {initiateError && (
+              <div className="bg-red-950/60 border border-red-800 text-red-300 text-xs p-3.5 rounded-2xl flex items-center gap-2 mt-3 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{initiateError}</span>
+              </div>
+            )}
+
+            {/* Submit Button */}
             <Button
               type="submit"
+              disabled={isInitiating}
               className="w-full mt-4 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-base py-4 rounded-full shadow-lg shadow-[#A3E635]/20 transition-all h-14 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Tiếp Tục Xác Nhận</span>
+              <span>{isInitiating ? 'Đang Khởi Tạo Giao Dịch...' : 'Tiếp Tục Xác Nhận'}</span>
               <ChevronRight className="w-5 h-5" />
             </Button>
           </div>
@@ -609,44 +591,52 @@ export function TransferForm() {
       )}
 
       {/* STEP 2: TRANSACTION REVIEW & SUMMARY */}
-      {currentStep === 2 && reviewValues && (
+      {currentStep === 2 && initiatedData && (
         <div className="bg-[#141C2E] border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-1">
             <Badge variant="outline" className="border-emerald-800 text-emerald-400 bg-emerald-950/60 font-semibold px-3 py-1 rounded-full">
-              Bước 2: Kiểm Tra Thông Tin
+              Bước 2: Kiểm Tra & Nhập Smart PIN
             </Badge>
-            <h3 className="text-2xl font-black text-white">Xác Nhận Chi Tiết Giao Dịch</h3>
-            <p className="text-xs text-slate-400">Vui lòng kiểm tra kỹ thông tin người thụ hưởng trước khi tiếp tục</p>
+            <h3 className="text-2xl font-black text-white">Xác Nhận Chi Tiết Chuyển Tiền</h3>
+            <p className="text-xs text-slate-400">
+              Mã giao dịch tạm tính: <span className="font-mono text-[#A3E635] font-bold">{initiatedData.transactionCode}</span>
+            </p>
           </div>
 
           <div className="bg-[#1A253D] border border-slate-700/80 rounded-2xl p-6 space-y-4 text-sm">
             <div className="flex justify-between border-b border-slate-800 pb-3">
               <span className="text-slate-400">Tài khoản nguồn:</span>
-              <span className="font-mono font-bold text-white">{reviewValues.sourceAccountNumber}</span>
+              <span className="font-mono font-bold text-white">{initiatedData.sourceAccountNumber}</span>
             </div>
             <div className="flex justify-between border-b border-slate-800 pb-3">
               <span className="text-slate-400">Ngân hàng nhận:</span>
-              <span className="font-bold text-emerald-400">
-                {BANKS_LIST.find((b) => b.code === reviewValues.bankCode)?.name || reviewValues.bankCode}
-              </span>
+              <span className="font-bold text-emerald-400">Digital Bank (Cùng hệ thống)</span>
             </div>
             <div className="flex justify-between border-b border-slate-800 pb-3">
               <span className="text-slate-400">Tài khoản thụ hưởng:</span>
-              <span className="font-mono font-bold text-[#A3E635] text-base">{reviewValues.targetAccountNumber}</span>
+              <span className="font-mono font-bold text-[#A3E635] text-base">{initiatedData.targetAccountNumber}</span>
             </div>
+            {initiatedData.targetAccountName && (
+              <div className="flex justify-between border-b border-slate-800 pb-3">
+                <span className="text-slate-400">Người thụ hưởng:</span>
+                <span className="font-bold text-white uppercase">{initiatedData.targetAccountName}</span>
+              </div>
+            )}
             <div className="flex justify-between border-b border-slate-800 pb-3">
               <span className="text-slate-400">Số tiền chuyển:</span>
               <span className="font-mono font-black text-2xl text-[#A3E635]">
-                {reviewValues.amount.toLocaleString('vi-VN')} VND
+                {initiatedData.amount.toLocaleString('vi-VN')} VND
               </span>
             </div>
             <div className="flex justify-between border-b border-slate-800 pb-3">
               <span className="text-slate-400">Phí giao dịch:</span>
-              <span className="text-emerald-400 font-bold">Miễn phí (Napas 24/7)</span>
+              <span className="text-emerald-400 font-bold">
+                {initiatedData.feeAmount > 0 ? `${initiatedData.feeAmount.toLocaleString('vi-VN')} VND` : 'Miễn phí'}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Nội dung chuyển tiền:</span>
-              <span className="font-medium text-slate-200">{reviewValues.description || 'Chuyển tiền'}</span>
+              <span className="font-medium text-slate-200">{initiatedData.description || 'Chuyển tiền'}</span>
             </div>
           </div>
 
@@ -657,15 +647,15 @@ export function TransferForm() {
               onClick={() => setCurrentStep(1)}
               className="flex-1 border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold h-12 rounded-full"
             >
-              Chỉnh Sửa
+              Quay Lại
             </Button>
             <Button
               type="button"
-              disabled={isTransferring}
-              onClick={handleConfirmTransfer}
+              onClick={handleOpenPinVerification}
               className="flex-1 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold h-12 rounded-full shadow-lg shadow-[#A3E635]/20 flex items-center justify-center gap-2"
             >
-              {isTransferring ? 'Đang Xử Lý...' : 'Xác Nhận & Gửi OTP'}
+              <ShieldCheck className="w-5 h-5" />
+              <span>Nhập Smart PIN để Chuyển</span>
             </Button>
           </div>
         </div>
@@ -675,20 +665,29 @@ export function TransferForm() {
       {currentStep === 3 && completedReceipt && (
         <Card className="bg-[#141C2E] border-emerald-500/50 text-center p-8 shadow-2xl rounded-3xl w-full text-slate-100">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-xl shadow-emerald-500/20">
+            <div className="w-20 h-20 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-[#A3E635] shadow-xl shadow-emerald-500/20">
               <CheckCircle2 className="w-12 h-12 animate-in zoom-in-50 duration-300" />
             </div>
             <h3 className="text-2xl font-black text-white">Chuyển Tiền Thành Công!</h3>
-            <p className="text-xs text-slate-400">
-              Mã giao dịch: <span className="font-mono font-bold text-[#A3E635] text-base">{completedReceipt.transactionReference}</span>
-            </p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Mã giao dịch:</span>
+              <span className="font-mono font-bold text-[#A3E635] text-base">{completedReceipt.transactionCode}</span>
+              <button 
+                onClick={() => handleCopyTxCode(completedReceipt.transactionCode)}
+                className="text-slate-400 hover:text-white p-1"
+                title="Sao chép mã giao dịch"
+              >
+                <Copy className="w-3.5 h-3.5 text-emerald-400" />
+              </button>
+              {copiedCode && <span className="text-[10px] text-[#A3E635] font-bold">Đã chép!</span>}
+            </div>
           </div>
 
           <CardContent className="space-y-6 pt-6">
             <div className="bg-[#1A253D] p-6 rounded-2xl border border-slate-700/60 space-y-3 text-sm text-left">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span className="text-slate-400">Số tiền trích:</span>
-                <span className="font-mono font-black text-emerald-400 text-xl">
+                <span className="font-mono font-black text-[#A3E635] text-2xl">
                   {completedReceipt.amount.toLocaleString('vi-VN')} VND
                 </span>
               </div>
@@ -700,21 +699,46 @@ export function TransferForm() {
                 <span className="text-slate-400">Tài khoản thụ hưởng:</span>
                 <span className="font-mono text-white font-bold">{completedReceipt.targetAccountNumber}</span>
               </div>
+              {completedReceipt.targetAccountName && (
+                <div className="flex justify-between border-t border-slate-800 pt-3">
+                  <span className="text-slate-400">Tên người nhận:</span>
+                  <span className="font-bold text-emerald-400 uppercase">{completedReceipt.targetAccountName}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-slate-800 pt-3">
+                <span className="text-slate-400">Nội dung chuyển tiền:</span>
+                <span className="font-medium text-slate-200">{completedReceipt.description}</span>
+              </div>
               <div className="flex justify-between border-t border-slate-800 pt-3">
                 <span className="text-slate-400">Thời gian thực hiện:</span>
-                <span className="text-slate-300 text-xs font-mono">{new Date(completedReceipt.executedAt).toLocaleString('vi-VN')}</span>
+                <span className="text-slate-300 text-xs font-mono">
+                  {completedReceipt.completedAt 
+                    ? new Date(completedReceipt.completedAt).toLocaleString('vi-VN') 
+                    : new Date(completedReceipt.createdAt).toLocaleString('vi-VN')}
+                </span>
               </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <Link href="/transactions" className="flex-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-slate-700 bg-[#1A253D] hover:bg-[#253554] text-slate-200 font-bold text-sm h-12 rounded-full flex items-center justify-center gap-2"
+                >
+                  <History className="w-4 h-4 text-emerald-400" />
+                  <span>Xem Lịch Sử Giao Dịch</span>
+                </Button>
+              </Link>
               <Button
                 type="button"
                 onClick={() => {
                   setCompletedReceipt(null);
+                  setInitiatedData(null);
                   setCurrentStep(1);
                   reset();
                 }}
-                className="flex-1 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm py-3.5 rounded-full shadow-lg shadow-[#A3E635]/20 h-12"
+                className="flex-1 bg-[#A3E635] hover:bg-[#86efac] text-slate-950 font-extrabold text-sm h-12 rounded-full shadow-lg shadow-[#A3E635]/20"
               >
                 Thực Hiện Giao Dịch Mới
               </Button>
@@ -723,14 +747,21 @@ export function TransferForm() {
         </Card>
       )}
 
-      {/* STEP-UP OTP MODAL POPUP */}
-      <OtpModal
-        isOpen={showOtpModal}
-        onClose={() => setShowOtpModal(false)}
-        onVerify={handleOtpVerify}
-        amount={reviewValues?.amount || 0}
-        isLoading={isVerifyingOtp}
-      />
+      {/* SMART PIN VERIFICATION MODAL */}
+      {initiatedData && (
+        <PinVerificationModal
+          isOpen={showPinModal}
+          onClose={() => setShowPinModal(false)}
+          onConfirm={handleConfirmWithPin}
+          amount={initiatedData.amount}
+          targetAccountName={initiatedData.targetAccountName}
+          targetAccountNumber={initiatedData.targetAccountNumber}
+          transactionCode={initiatedData.transactionCode}
+          expiresInSeconds={initiatedData.expiresInSeconds || 300}
+          isLoading={isConfirming}
+          errorMessage={pinError}
+        />
+      )}
     </div>
   );
 }

@@ -60,6 +60,7 @@ public enum ErrorCode {
     CARD_NOT_FOUND("CARD_001", "Bank card not found", HttpStatus.NOT_FOUND),
     CARD_LOCKED("CARD_002", "Bank card is locked", HttpStatus.BAD_REQUEST),
     INVALID_PIN("CARD_003", "Invalid card PIN", HttpStatus.BAD_REQUEST),
+    PIN_NOT_MATCH("CARD_004", "Card PIN does not match", HttpStatus.BAD_REQUEST),
 
     // 7. OTP
 

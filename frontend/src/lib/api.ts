@@ -25,49 +25,26 @@ export * from './types/admin';
 
 
 export { accountApi } from './api/accountApi';
-export type { AccountResponseData, AccountsListResponse } from './api/accountApi';
+export type { AccountResponseData, AccountsListResponse, AccountLookupResponseData } from './api/accountApi';
 
-export const transferApi = {
-  async executeTransfer(payload: TransferRequest): Promise<TransferReceipt> {
-    const idempotencyKey = typeof crypto !== 'undefined' && crypto.randomUUID 
-      ? crypto.randomUUID() 
-      : 'IDEM-' + Date.now();
+export { transferApi } from './api/transferApi';
+export type {
+  InternalTransferInitiatePayload,
+  TransferInitiateResponseData,
+  InternalTransferInitiateApiResponse,
+  InternalTransferConfirmPayload,
+  InternalTransferConfirmApiResponse,
+  TransactionResponseData,
+} from './api/transferApi';
 
-    try {
-      const res = await apiClient.post<{ data: TransferReceipt }>('/transfers', payload, {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      });
-      return res.data.data;
-    } catch {
-      return {
-        transactionReference: 'FT-' + Math.floor(100000 + Math.random() * 900000),
-        sourceAccountNumber: payload.sourceAccountNumber,
-        targetAccountNumber: payload.targetAccountNumber,
-        amount: payload.amount,
-        fee: 0,
-        executedAt: new Date().toISOString(),
-        status: 'COMPLETED',
-      };
-    }
-  },
-
-  async verifyOtp(payload: OtpVerificationPayload): Promise<TransferReceipt> {
-    try {
-      const res = await apiClient.post<{ data: TransferReceipt }>('/transfers/verify-otp', payload);
-      return res.data.data;
-    } catch {
-      return {
-        transactionReference: payload.transactionReference,
-        sourceAccountNumber: '9333436513',
-        targetAccountNumber: '8880987654',
-        amount: 500000,
-        fee: 0,
-        executedAt: new Date().toISOString(),
-        status: 'COMPLETED',
-      };
-    }
-  },
-};
+export { transactionApi } from './api/transactionApi';
+export type {
+  TransactionSummaryData,
+  PageResponse,
+  TransactionHistoryFilterParams,
+  TransactionHistoryApiResponse,
+  SingleTransactionApiResponse,
+} from './api/transactionApi';
 
 export const beneficiaryApi = {
   async getBeneficiaries(): Promise<Beneficiary[]> {

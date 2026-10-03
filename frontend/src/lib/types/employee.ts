@@ -157,6 +157,44 @@ export interface CashOpPayload {
   otp?: string;
 }
 
+export interface DepositCashPayload {
+  accountNumber: string;
+  amount: number;
+  depositorName: string;
+  depositorNationalId?: string;
+  description?: string;
+}
+
+export interface WithdrawCashPayload {
+  accountNumber: string;
+  amount: number;
+  withdrawerName: string;
+  withdrawerNationalId?: string;
+  description?: string;
+}
+
+export interface CashTransactionResponseData {
+  referenceCode: string;
+  transactionCode: string;
+  accountNumber: string;
+  accountName: string;
+  operationType: 'DEPOSIT' | 'WITHDRAWAL';
+  amount: number;
+  balanceAfter: number;
+  tellerCode?: string;
+  tellerName?: string;
+  depositorName?: string;
+  description?: string;
+  createdAt: string;
+}
+
+export interface CashTransactionApiResponse {
+  success: boolean;
+  message: string;
+  data: CashTransactionResponseData;
+  timestamp: string;
+}
+
 export interface EmployeeTransaction {
   id: string;
   txHash: string;
